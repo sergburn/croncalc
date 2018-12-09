@@ -1,0 +1,23 @@
+# Copyright (c) 2018 Sergey Burnevsky (sergey.burnevsky @ gmail.com)
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+language: cpp
+
+sudo: false
+
+os:
+  - linux
+  - osx
+
+compiler:
+  - gcc
+  - clang
+
+script:
+  - ./build.sh
+
+notifications:
+  email:
+    on_success: always
