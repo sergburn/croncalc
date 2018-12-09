@@ -27,6 +27,8 @@ enum
 {
     CRON_CALC_NAME_LEN = 3, /* All names in Cron have 3 chars */
     CRON_CALC_NAME_UPCASE = 'a' - 'A',
+    CRON_CALC_YEAR_START = 2000,
+    CRON_CALC_YEAR_END = CRON_CALC_YEAR_START + 63,
 };
 
 typedef struct cron_calc_name_map
@@ -61,7 +63,7 @@ static const cron_calc_field_def K_CRON_CALC_FIELD_DEFS[CRON_CALC_FIELD_LAST + 1
     { 1,        31,     NULL,                       0 },                            // CRON_CALC_FIELD_DAYS,
     { 1,        12,     K_CRON_CALC_MONTH_NAMES,    K_CRON_CALC_MONTH_NAMES_NUM },  // CRON_CALC_FIELD_MONTHS,
     { 0,        6,      K_CRON_CALC_DAY_NAMES,      K_CRON_CALC_DAY_NAMES_NUM },    // CRON_CALC_FIELD_WDAYS
-    { 2000,     2063,   NULL,                       0 },                            // CRON_CALC_FIELD_YEARS,
+    { CRON_CALC_YEAR_START, CRON_CALC_YEAR_END, NULL, 0 },                          // CRON_CALC_FIELD_YEARS,
 };
 
 // ----------------------------------------------------------------------------
@@ -333,7 +335,7 @@ cron_calc_error cron_calc_parse(
 
 // ----------------------------------------------------------------------------
 
-cron_calc_error cron_calc_next(const cron_calc* self, struct tm* instant)
+time_t cron_calc_next(const cron_calc* self, time_t after)
 {
 
 }

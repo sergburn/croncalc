@@ -27,7 +27,7 @@ public:
      * Does not modify this object.
      * @see cron_calc_next().
      */
-    cron_calc_error next(struct tm* instant) const;
+    time_t next(time_t after) const;
 
     friend bool operator==(const CronCalc& cron1, const CronCalc& cron2);
 

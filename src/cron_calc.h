@@ -94,12 +94,20 @@ cron_calc_error cron_calc_parse(cron_calc* self, const char* expr, cron_calc_opt
  *
  * @param self The ready cron_calc object, initialized by successful cron_calc_parse() call.
  *             Must not be NULL or contain only zeroes.
- * @param instant[in, out] Input - starting time, output - result time.
- *             Must be non-NULL and valid.
- * @return CRON_CALC_OK on success
- * @return CRON_CALC_ERROR_ARGUMENT if one or more arguments invalid.
+ * @param after Time instant to start next search after.
+ *              Note that even if given time matches specified rule,
+ *              it will not be returned, only some moment `after` it.
+ *              This allows to calol this function in a loop without changing argument:
+ *              @code
+ *              time_t start = 1515151515;
+ *              time_t next = cron_calc_next(..., start);
+ *              next = cron_calc_next(..., next);
+ *              next = cron_calc_next(..., next);
+ *              ...
+ *              @endcode
+ * @return Next time instant, or NULL if arguments are invalid
  */
-cron_calc_error cron_calc_next(const cron_calc* self, struct tm* instant);
+time_t cron_calc_next(const cron_calc* self, time_t after);
 
 /**
  * Utility function, compares two initialized `cron_calc` objects.

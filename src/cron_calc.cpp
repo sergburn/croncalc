@@ -29,7 +29,7 @@ cron_calc_error CronCalc::parse(const char* expr, cron_calc_option_mask options,
 
 // ----------------------------------------------------------------------------
 
-cron_calc_error CronCalc::next(struct tm* instant) const
+time_t CronCalc::next(time_t after) const
 {
-    return cron_calc_next(&mSelf, instant);
+    return cron_calc_next(&mSelf, after);
 }
