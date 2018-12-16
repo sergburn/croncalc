@@ -27,7 +27,7 @@ int gNumErrors = 0;
     uint32_t a2 = (arg2_); \
     if (a1 != a2) { \
         gNumErrors++; \
-        printf("Line %3d: CHECK_EQ_INT: %lu != %lu <= (" # arg1_ " != " # arg2_ ")\n", line_, a1, a2); \
+        printf("Line %3d: CHECK_EQ_INT: %u != %u <= (" # arg1_ " != " # arg2_ ")\n", line_, a1, a2); \
     } }
 
 static const char* TM_FORMAT = "%Y-%m-%d_%H:%M:%s";
