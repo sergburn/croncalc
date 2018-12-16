@@ -37,22 +37,26 @@ typedef struct cron_calc_name_map
     uint32_t value;
 } cron_calc_name_map;
 
-static cron_calc_name_map K_CRON_CALC_DAY_NAMES[] = {
+static const cron_calc_name_map CRON_CALC_DAY_NAMES[] = {
     { "SUN", 0 },{ "MON", 1 },{ "TUE", 2 },{ "WED", 3 },{ "THU", 4 },{ "FRI", 5 },{ "SAT", 6 },
 };
-static const uint32_t K_CRON_CALC_DAY_NAMES_NUM = sizeof(K_CRON_CALC_DAY_NAMES) / sizeof (cron_calc_name_map);
 
-static cron_calc_name_map K_CRON_CALC_MONTH_NAMES[] = {
+static const cron_calc_name_map CRON_CALC_MONTH_NAMES[] = {
     { "JAN", 1 },{ "FEB", 2 },{ "MAR", 3 },{ "APR", 4 }, { "MAY", 5 }, { "JUN", 6 },
     { "JUL", 7 },{ "AUG", 8 },{ "SEP", 9 },{ "OCT", 10 },{ "NOV", 11 },{ "DEC", 12 }
 };
-static const uint32_t K_CRON_CALC_MONTH_NAMES_NUM = sizeof(K_CRON_CALC_MONTH_NAMES) / sizeof (cron_calc_name_map);
+
+enum
+{
+    CRON_CALC_DAY_NAMES_NUM = sizeof(CRON_CALC_DAY_NAMES) / sizeof(cron_calc_name_map),
+    CRON_CALC_MONTH_NAMES_NUM = sizeof(CRON_CALC_MONTH_NAMES) / sizeof(cron_calc_name_map)
+};
 
 typedef struct cron_calc_field_def
 {
     uint32_t min;
     uint32_t max;
-    cron_calc_name_map* names;
+    const cron_calc_name_map* names;
     uint32_t num_names;
 } cron_calc_field_def;
 
@@ -61,8 +65,8 @@ static const cron_calc_field_def K_CRON_CALC_FIELD_DEFS[CRON_CALC_FIELD_LAST + 1
     { 0,        59,     NULL,                       0 },                            /* CRON_CALC_FIELD_MINUTES */
     { 0,        23,     NULL,                       0 },                            /* CRON_CALC_FIELD_HOURS */
     { 1,        31,     NULL,                       0 },                            /* CRON_CALC_FIELD_DAYS */
-    { 1,        12,     K_CRON_CALC_MONTH_NAMES,    K_CRON_CALC_MONTH_NAMES_NUM },  /* CRON_CALC_FIELD_MONTHS */
-    { 0,        6,      K_CRON_CALC_DAY_NAMES,      K_CRON_CALC_DAY_NAMES_NUM },    /* CRON_CALC_FIELD_WDAYS */
+    { 1,        12,     CRON_CALC_MONTH_NAMES,      CRON_CALC_MONTH_NAMES_NUM },    /* CRON_CALC_FIELD_MONTHS */
+    { 0,        6,      CRON_CALC_DAY_NAMES,        CRON_CALC_DAY_NAMES_NUM },      /* CRON_CALC_FIELD_WDAYS */
     { CRON_CALC_YEAR_START, CRON_CALC_YEAR_END, NULL, 0 },                          /* CRON_CALC_FIELD_YEARS */
 };
 
@@ -70,7 +74,6 @@ static const cron_calc_field_def K_CRON_CALC_FIELD_DEFS[CRON_CALC_FIELD_LAST + 1
 
 #define CRON_CALC_IS_DIGIT(a_) ((a_) >= '0' && (a_) <= '9')
 #define CRON_CALC_IS_NAME_CHAR(a_) (((a_) >= 'A' && (a_) <= 'Z') || ((a_) >= 'a' && (a_) <= 'z'))
-#define CRON_CALC_IS_TOKEN_END(a_) ((a_) == 0 || (a_) == ' ' || (a_) == ',')
 #define CRON_CALC_CONV_TM_YEAR(tm_year_) (tm_year + 1900 - CRON_CALC_YEAR_START)
 
 /* ---------------------------------------------------------------------------- */
