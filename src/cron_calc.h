@@ -1,7 +1,9 @@
-// Copyright (c) 2018 Sergey Burnevsky (sergey.burnevsky @ gmail.com)
-//
-// This software is released under the MIT License.
-// https://opensource.org/licenses/MIT
+/*
+ * Copyright (c) 2018 Sergey Burnevsky (sergey.burnevsky @ gmail.com)
+ *
+ * This software is released under the MIT License.
+ * https://opensource.org/licenses/MIT
+ */
 
 #pragma once
 
@@ -50,7 +52,7 @@ typedef enum cron_calc_error
     CRON_CALC_ERROR_EXPR_SHORT = 4,         /*!< Expression too short, not all required fields found */
     CRON_CALC_ERROR_EXPR_LONG = 5,          /*!< Expression too long, did not end after last supported field */
     CRON_CALC_ERROR_INVALID_NAME = 6,       /*!< Unknown value name detected */
-    CRON_CALC_ERROR_NUMBER_EXPECTED = 7,    /*!< Number could not be parsed */
+    CRON_CALC_ERROR_NUMBER_EXPECTED = 7     /*!< Number could not be parsed */
 } cron_calc_error;
 
 /**

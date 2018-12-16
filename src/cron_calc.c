@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2018 Sergey Burnevsky (sergey.burnevsky @ gmail.com)
  *
  * This software is released under the MIT License.
@@ -28,7 +28,7 @@ enum
     CRON_CALC_NAME_LEN = 3, /* All names in Cron have 3 chars */
     CRON_CALC_NAME_UPCASE = 'a' - 'A',
     CRON_CALC_YEAR_START = 2000,
-    CRON_CALC_YEAR_END = CRON_CALC_YEAR_START + 63,
+    CRON_CALC_YEAR_END = CRON_CALC_YEAR_START + 63
 };
 
 typedef struct cron_calc_name_map
@@ -57,22 +57,23 @@ typedef struct cron_calc_field_def
 } cron_calc_field_def;
 
 static const cron_calc_field_def K_CRON_CALC_FIELD_DEFS[CRON_CALC_FIELD_LAST + 1] = {
-    { 0,        59,     NULL,                       0 },                            // CRON_CALC_FIELD_SECONDS
-    { 0,        59,     NULL,                       0 },                            // CRON_CALC_FIELD_MINUTES
-    { 0,        23,     NULL,                       0 },                            // CRON_CALC_FIELD_HOURS,
-    { 1,        31,     NULL,                       0 },                            // CRON_CALC_FIELD_DAYS,
-    { 1,        12,     K_CRON_CALC_MONTH_NAMES,    K_CRON_CALC_MONTH_NAMES_NUM },  // CRON_CALC_FIELD_MONTHS,
-    { 0,        6,      K_CRON_CALC_DAY_NAMES,      K_CRON_CALC_DAY_NAMES_NUM },    // CRON_CALC_FIELD_WDAYS
-    { CRON_CALC_YEAR_START, CRON_CALC_YEAR_END, NULL, 0 },                          // CRON_CALC_FIELD_YEARS,
+    { 0,        59,     NULL,                       0 },                            /* CRON_CALC_FIELD_SECONDS */
+    { 0,        59,     NULL,                       0 },                            /* CRON_CALC_FIELD_MINUTES */
+    { 0,        23,     NULL,                       0 },                            /* CRON_CALC_FIELD_HOURS */
+    { 1,        31,     NULL,                       0 },                            /* CRON_CALC_FIELD_DAYS */
+    { 1,        12,     K_CRON_CALC_MONTH_NAMES,    K_CRON_CALC_MONTH_NAMES_NUM },  /* CRON_CALC_FIELD_MONTHS */
+    { 0,        6,      K_CRON_CALC_DAY_NAMES,      K_CRON_CALC_DAY_NAMES_NUM },    /* CRON_CALC_FIELD_WDAYS */
+    { CRON_CALC_YEAR_START, CRON_CALC_YEAR_END, NULL, 0 },                          /* CRON_CALC_FIELD_YEARS */
 };
 
-// ----------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------- */
 
 #define CRON_CALC_IS_DIGIT(a_) ((a_) >= '0' && (a_) <= '9')
 #define CRON_CALC_IS_NAME_CHAR(a_) (((a_) >= 'A' && (a_) <= 'Z') || ((a_) >= 'a' && (a_) <= 'z'))
 #define CRON_CALC_IS_TOKEN_END(a_) ((a_) == 0 || (a_) == ' ' || (a_) == ',')
+#define CRON_CALC_CONV_TM_YEAR(tm_year_) (tm_year + 1900 - CRON_CALC_YEAR_START)
 
-// ----------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------- */
 
 static cron_calc_error cron_calc_set_field(
     cron_calc* self,
@@ -81,6 +82,7 @@ static cron_calc_error cron_calc_set_field(
     uint32_t step,
     cron_calc_field field)
 {
+    int i;
     uint64_t value = 0;
 
     if (step < 1)
@@ -88,9 +90,9 @@ static cron_calc_error cron_calc_set_field(
         return CRON_CALC_ERROR_NUMBER_RANGE;
     }
 
-    for (uint64_t i = min; i <= max; i += step)
+    for (i = min; i <= max; i += step)
     {
-        value |= 1ULL << i;
+        value |= (uint64_t)1 << i;
     }
 
     /* ranges checked at parsing */
@@ -121,7 +123,7 @@ static cron_calc_error cron_calc_set_field(
     return CRON_CALC_OK;
 }
 
-// ----------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------- */
 
 static void cron_calc_set_field_default(cron_calc* self, cron_calc_field field)
 {
@@ -129,7 +131,7 @@ static void cron_calc_set_field_default(cron_calc* self, cron_calc_field field)
     cron_calc_set_field(self, field_def->min, field_def->max, 1, field);
 }
 
-// ----------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------- */
 
 static cron_calc_error cron_calc_parse_limited_number(const char** pp, uint32_t* value, uint32_t minimum, uint32_t maximum)
 {
@@ -160,14 +162,14 @@ static cron_calc_error cron_calc_parse_limited_number(const char** pp, uint32_t*
     return CRON_CALC_OK;
 }
 
-// ----------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------- */
 
 static cron_calc_error cron_calc_parse_number(const char** pp, uint32_t* value, const cron_calc_field_def* field_def)
 {
     return cron_calc_parse_limited_number(pp, value, field_def->min, field_def->max);
 }
 
-// ----------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------- */
 
 static cron_calc_error cron_calc_parse_name(const char** pp, uint32_t* value, const cron_calc_field_def* field_def)
 {
@@ -201,7 +203,7 @@ static cron_calc_error cron_calc_parse_name(const char** pp, uint32_t* value, co
     return CRON_CALC_ERROR_INVALID_NAME;
 }
 
-// ----------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------- */
 
 static cron_calc_error cron_calc_parse_value(const char** pp, uint32_t* value, const cron_calc_field_def* field_def)
 {
@@ -212,7 +214,7 @@ static cron_calc_error cron_calc_parse_value(const char** pp, uint32_t* value, c
     return cron_calc_parse_number(pp, value, field_def);
 }
 
-// ----------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------- */
 
 cron_calc_error cron_calc_parse(
     cron_calc* self,
@@ -221,7 +223,7 @@ cron_calc_error cron_calc_parse(
     const char** err_location)
 {
     cron_calc_error err = CRON_CALC_OK;
-    uint32_t val, min, max, step;
+    uint32_t min, max, step;
     const char* p = expr;
     bool is_range = false;
 
@@ -333,14 +335,14 @@ cron_calc_error cron_calc_parse(
     return CRON_CALC_OK;
 }
 
-// ----------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------- */
 
 time_t cron_calc_next(const cron_calc* self, time_t after)
 {
-
+    return (time_t) 0;
 }
 
-// ----------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------- */
 
 bool cron_calc_is_same(const cron_calc* left, const cron_calc* right)
 {

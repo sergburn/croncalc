@@ -254,6 +254,6 @@ int main()
     check_same("* * * 2 *", "* * * Feb *");
     check_same("*  *  * *  1 *", "* * * * 1 *");
 #endif
-    printf("Test failures: %d\n", gNumErrors);
+    printf("Failures: %d\n", gNumErrors);
     return gNumErrors;
 }

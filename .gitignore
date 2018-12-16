@@ -33,3 +33,6 @@
 
 # Makefiles
 .cmake
+
+# VSCode files
+.vscode/
