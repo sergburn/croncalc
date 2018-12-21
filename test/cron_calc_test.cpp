@@ -7,20 +7,20 @@
 
 #include <time.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "cron_calc.hpp"
 
-int gNumErrors = 0;
+/* ---------------------------------------------------------------------------- */
 
-#define CHECK_TRUE(arg_) { bool tmp = (arg_); if (!tmp) { \
-    gNumErrors++; \
-    printf("Line %3d: CHECK_TRUE: " # arg_ "\n", __LINE__); \
-    } }
+int gNumErrors = 0;
 
 #define CHECK_TRUE_LN(arg_, line_) { bool tmp = (arg_); if (!tmp) { \
     gNumErrors++; \
     printf("Line %3d: CHECK_TRUE: " # arg_ "\n", line_); \
     } }
+
+#define CHECK_TRUE(arg_) CHECK_TRUE_LN(arg_, __LINE__)
 
 #define CHECK_EQ_INT_LN(arg1_, arg2_, line_) { \
     uint32_t a1 = (arg1_); \
@@ -29,6 +29,10 @@ int gNumErrors = 0;
         gNumErrors++; \
         printf("Line %3d: CHECK_EQ_INT: %u != %u <= (" # arg1_ " != " # arg2_ ")\n", line_, a1, a2); \
     } }
+
+#define CHECK_EQ_INT(arg1_, arg2_) CHECK_EQ_INT_LN(arg1_, arg2_, __LINE__)
+
+/* ---------------------------------------------------------------------------- */
 
 static const char* TM_FORMAT = "%Y-%m-%d_%H:%M:%s";
 static const char* TM_SCAN_FMT = "%u-%u-%u_%u:%u:%u";
@@ -82,6 +86,8 @@ void check_same(const char* expr1, const char* expr2)
     CHECK_TRUE(cron1 == cron2);
 }
 #endif
+
+/* ---------------------------------------------------------------------------- */
 
 void check_invalid(
     const char* expr,

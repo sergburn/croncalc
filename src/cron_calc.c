@@ -31,33 +31,27 @@ enum
     CRON_CALC_YEAR_END = CRON_CALC_YEAR_START + 63
 };
 
-typedef struct cron_calc_name_map
-{
-    const char* name;
-    uint32_t value;
-} cron_calc_name_map;
-
-static const cron_calc_name_map CRON_CALC_DAY_NAMES[] = {
-    { "SUN", 0 },{ "MON", 1 },{ "TUE", 2 },{ "WED", 3 },{ "THU", 4 },{ "FRI", 5 },{ "SAT", 6 },
+static const char* const CRON_CALC_DAY_NAMES[] = {
+    "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"
 };
 
-static const cron_calc_name_map CRON_CALC_MONTH_NAMES[] = {
-    { "JAN", 1 },{ "FEB", 2 },{ "MAR", 3 },{ "APR", 4 }, { "MAY", 5 }, { "JUN", 6 },
-    { "JUL", 7 },{ "AUG", 8 },{ "SEP", 9 },{ "OCT", 10 },{ "NOV", 11 },{ "DEC", 12 }
+static const char* const CRON_CALC_MONTH_NAMES[] = {
+    "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
 };
 
 enum
 {
-    CRON_CALC_DAY_NAMES_NUM = sizeof(CRON_CALC_DAY_NAMES) / sizeof(cron_calc_name_map),
-    CRON_CALC_MONTH_NAMES_NUM = sizeof(CRON_CALC_MONTH_NAMES) / sizeof(cron_calc_name_map)
+    CRON_CALC_DAY_NAMES_NUM = sizeof(CRON_CALC_DAY_NAMES) / sizeof(char*),
+    CRON_CALC_MONTH_NAMES_NUM = sizeof(CRON_CALC_MONTH_NAMES) / sizeof(char*)
 };
 
 typedef struct cron_calc_field_def
 {
     uint32_t min;
     uint32_t max;
-    const cron_calc_name_map* names;
-    uint32_t num_names;
+    const char* const* names;
+    uint32_t names_count;
+    uint32_t names_first_index;
 } cron_calc_field_def;
 
 static const cron_calc_field_def K_CRON_CALC_FIELD_DEFS[CRON_CALC_FIELD_LAST + 1] = {
@@ -74,7 +68,6 @@ static const cron_calc_field_def K_CRON_CALC_FIELD_DEFS[CRON_CALC_FIELD_LAST + 1
 
 #define CRON_CALC_IS_DIGIT(a_) ((a_) >= '0' && (a_) <= '9')
 #define CRON_CALC_IS_NAME_CHAR(a_) (((a_) >= 'A' && (a_) <= 'Z') || ((a_) >= 'a' && (a_) <= 'z'))
-#define CRON_CALC_CONV_TM_YEAR(tm_year_) (tm_year + 1900 - CRON_CALC_YEAR_START)
 
 /* ---------------------------------------------------------------------------- */
 
@@ -191,14 +184,14 @@ static cron_calc_error cron_calc_parse_name(const char** pp, uint32_t* value, co
     {
         return CRON_CALC_ERROR_INVALID_NAME;
     }
-    for (i = 0; i < field_def->num_names; i++)
+    for (i = 0; i < field_def->names_count; i++)
     {
-        const char* fname = field_def->names[i].name;
+        const char* fname = field_def->names[i];
         if ((fname[0] == name[0] || fname[0] == name[0] + CRON_CALC_NAME_UPCASE) &&
             (fname[1] == name[1] || fname[1] == name[1] + CRON_CALC_NAME_UPCASE) &&
             (fname[2] == name[2] || fname[2] == name[2] + CRON_CALC_NAME_UPCASE))
         {
-            *value = field_def->names[i].value;
+            *value = i + field_def->names_first_index;
             *pp = p;
             return CRON_CALC_OK;
         }
@@ -210,7 +203,7 @@ static cron_calc_error cron_calc_parse_name(const char** pp, uint32_t* value, co
 
 static cron_calc_error cron_calc_parse_value(const char** pp, uint32_t* value, const cron_calc_field_def* field_def)
 {
-    if (field_def->num_names && CRON_CALC_IS_NAME_CHAR(**pp))
+    if (field_def->names_count && CRON_CALC_IS_NAME_CHAR(**pp))
     {
         return cron_calc_parse_name(pp, value, field_def);
     }

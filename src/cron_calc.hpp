@@ -3,7 +3,8 @@
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
 
-#pragma once
+#ifndef CRON_CALC_HPP_
+#define CRON_CALC_HPP_
 
 #include "cron_calc.h"
 
@@ -34,3 +35,5 @@ public:
 private:
     cron_calc mSelf;
 };
+
+#endif // CRON_CALC_HPP_

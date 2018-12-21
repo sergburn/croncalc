@@ -5,8 +5,6 @@
  * https://opensource.org/licenses/MIT
  */
 
-#pragma once
-
 #ifndef CRON_CALC_H_
 #define CRON_CALC_H_
 
