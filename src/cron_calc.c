@@ -7,6 +7,7 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <stddef.h>
 
 #include "cron_calc.h"
 
@@ -28,21 +29,26 @@ enum
     CRON_CALC_NAME_LEN = 3, /* All names in Cron have 3 chars */
     CRON_CALC_NAME_UPCASE = 'a' - 'A',
     CRON_CALC_YEAR_START = 2000,
-    CRON_CALC_YEAR_END = CRON_CALC_YEAR_START + 63
+    CRON_CALC_YEAR_END = CRON_CALC_YEAR_START + 63,
+    CRON_CALC_YEAR_MAX = (sizeof(time_t) == 8) ? INT32_MAX : 2038,
 };
 
-static const char* const CRON_CALC_DAY_NAMES[] = {
+static const char* const CRON_CALC_DAYS[] = {
     "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"
 };
 
-static const char* const CRON_CALC_MONTH_NAMES[] = {
+static const char* const CRON_CALC_MONTHS[] = {
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+};
+
+static const uint32_t CRON_CALC_MONTH_LENGTHS[] = {
+    31, 28 ,31 ,30 ,31 ,30, 31, 31, 30, 31, 30, 31
 };
 
 enum
 {
-    CRON_CALC_DAY_NAMES_NUM = sizeof(CRON_CALC_DAY_NAMES) / sizeof(char*),
-    CRON_CALC_MONTH_NAMES_NUM = sizeof(CRON_CALC_MONTH_NAMES) / sizeof(char*)
+    CRON_CALC_DAYS_NUM = sizeof(CRON_CALC_DAYS) / sizeof(char*),
+    CRON_CALC_MONTHS_NUM = sizeof(CRON_CALC_MONTHS) / sizeof(char*)
 };
 
 typedef struct cron_calc_field_def
@@ -55,19 +61,54 @@ typedef struct cron_calc_field_def
 } cron_calc_field_def;
 
 static const cron_calc_field_def K_CRON_CALC_FIELD_DEFS[CRON_CALC_FIELD_LAST + 1] = {
-    { 0,        59,     NULL,                       0 },                            /* CRON_CALC_FIELD_SECONDS */
-    { 0,        59,     NULL,                       0 },                            /* CRON_CALC_FIELD_MINUTES */
-    { 0,        23,     NULL,                       0 },                            /* CRON_CALC_FIELD_HOURS */
-    { 1,        31,     NULL,                       0 },                            /* CRON_CALC_FIELD_DAYS */
-    { 1,        12,     CRON_CALC_MONTH_NAMES,      CRON_CALC_MONTH_NAMES_NUM },    /* CRON_CALC_FIELD_MONTHS */
-    { 0,        6,      CRON_CALC_DAY_NAMES,        CRON_CALC_DAY_NAMES_NUM },      /* CRON_CALC_FIELD_WDAYS */
-    { CRON_CALC_YEAR_START, CRON_CALC_YEAR_END, NULL, 0 },                          /* CRON_CALC_FIELD_YEARS */
+    { 0,        59,     NULL,               0 },                       /* CRON_CALC_FIELD_SECONDS */
+    { 0,        59,     NULL,               0 },                       /* CRON_CALC_FIELD_MINUTES */
+    { 0,        23,     NULL,               0 },                       /* CRON_CALC_FIELD_HOURS */
+    { 1,        31,     NULL,               0 },                       /* CRON_CALC_FIELD_DAYS */
+    { 1,        12,     CRON_CALC_MONTHS,   CRON_CALC_MONTHS_NUM },    /* CRON_CALC_FIELD_MONTHS */
+    { 0,        6,      CRON_CALC_DAYS,     CRON_CALC_DAYS_NUM },      /* CRON_CALC_FIELD_WDAYS */
+    { CRON_CALC_YEAR_START, CRON_CALC_YEAR_END, NULL, 0 },             /* CRON_CALC_FIELD_YEARS */
+};
+
+typedef enum cron_calc_tm_level {
+    CRON_CALC_TM_YEAR,
+    CRON_CALC_TM_MONTH,
+    CRON_CALC_TM_DAY,
+    CRON_CALC_TM_HOUR,
+    CRON_CALC_TM_MINUTE,
+    CRON_CALC_TM_SECOND,
+
+    CRON_CALC_TM_WDAY
+} cron_calc_tm_level;
+
+typedef struct cron_calc_tm_field_def
+{
+    size_t tm_offset;
+    cron_calc_field cron_field;
+} cron_calc_tm_field_def;
+
+static const cron_calc_tm_field_def K_CRON_CALC_TM_FIELDS[CRON_CALC_FIELD_LAST + 1] = {
+    { offsetof(struct tm, tm_year), CRON_CALC_FIELD_YEARS },
+    { offsetof(struct tm, tm_mon),  CRON_CALC_FIELD_MONTHS },
+    { offsetof(struct tm, tm_mday), CRON_CALC_FIELD_DAYS },
+    { offsetof(struct tm, tm_hour), CRON_CALC_FIELD_HOURS },
+    { offsetof(struct tm, tm_min),  CRON_CALC_FIELD_MINUTES },
+    { offsetof(struct tm, tm_sec),  CRON_CALC_FIELD_SECONDS },
+    { offsetof(struct tm, tm_wday), CRON_CALC_FIELD_WDAYS }
 };
 
 /* ---------------------------------------------------------------------------- */
 
 #define CRON_CALC_IS_DIGIT(a_) ((a_) >= '0' && (a_) <= '9')
 #define CRON_CALC_IS_NAME_CHAR(a_) (((a_) >= 'A' && (a_) <= 'Z') || ((a_) >= 'a' && (a_) <= 'z'))
+
+#define CRON_CALC_TM_CRON_FIELD(tm_field_) (K_CRON_CALC_TM_FIELDS[(tm_field_)].cron_field)
+#define CRON_CALC_TM_CRON_FIELD_DEF(tm_field_) (&(K_CRON_CALC_FIELD_DEFS[CRON_CALC_TM_CRON_FIELD(tm_field_)]))
+#define CRON_CALC_TM_FIELD(tm_val_, tm_field_) (int*)((uint8_t*)(tm_val_) + K_CRON_CALC_TM_FIELDS[(int)(tm_field_)].tm_offset)
+#define CRON_CALC_TM_FIELD_MIN(tm_field_) (CRON_CALC_TM_CRON_FIELD_DEF(tm_field_)->min)
+#define CRON_CALC_TM_FIELD_MAX(tm_field_) (CRON_CALC_TM_CRON_FIELD_DEF(tm_field_)->max)
+
+#define CRON_CALC_MATCHES_MASK(val_, mask_) ((mask_) & ((uint64_t)1 << (val_)))
 
 /* ---------------------------------------------------------------------------- */
 
@@ -222,14 +263,24 @@ cron_calc_error cron_calc_parse(
     uint32_t min, max, step;
     const char* p = expr;
     bool is_range = false;
+    cron_calc_field field = CRON_CALC_FIELD_SECONDS;
+    cron_calc_field last_field = CRON_CALC_FIELD_YEARS;
 
-    cron_calc_field field =
-        options & CRON_CALC_OPT_WITH_SECONDS ?
-        CRON_CALC_FIELD_SECONDS : CRON_CALC_FIELD_MINUTES;
+    if (!(options & CRON_CALC_OPT_WITH_SECONDS))
+    {
+        cron_calc_set_field(self, /* match only at seconds 00 */
+            K_CRON_CALC_FIELD_DEFS[field].min,
+            K_CRON_CALC_FIELD_DEFS[field].min,
+            1,
+            CRON_CALC_FIELD_SECONDS);
+        field = CRON_CALC_FIELD_MINUTES;
+    }
 
-    cron_calc_field last_field =
-        options & CRON_CALC_OPT_WITH_YEARS ?
-        CRON_CALC_FIELD_YEARS : CRON_CALC_FIELD_WDAYS;
+    if (!(options & CRON_CALC_OPT_WITH_YEARS))
+    {
+        /* any year will match, even outside of range */
+        last_field = CRON_CALC_FIELD_WDAYS;
+    }
 
     if (err_location)
     {
@@ -299,7 +350,7 @@ cron_calc_error cron_calc_parse(
         }
     }
 
-    if (!err && options & CRON_CALC_OPT_ASSUME_STAR)
+    if (!err && (options & CRON_CALC_OPT_ASSUME_STAR))
     {
         for (; field < last_field; field++)
         {
@@ -332,10 +383,116 @@ cron_calc_error cron_calc_parse(
 }
 
 /* ---------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------- */
+
+static uint32_t cron_calc_month_days(int year, int month)
+{
+    if (month == 2)
+    {
+        return
+            year % 400 == 0 ? 29 :
+            year % 100 == 0 ? 28 :
+            year % 4 == 0 ? 29 : 28;
+    }
+    else
+    {
+        return CRON_CALC_MONTH_LENGTHS[month - 1];
+    }
+}
+
+/* ---------------------------------------------------------------------------- */
+
+uint64_t cron_calc_get_mask(const cron_calc* self, cron_calc_tm_level level)
+{
+    uint64_t mask =
+        level == CRON_CALC_TM_YEAR ? self->years :
+        level == CRON_CALC_TM_MONTH ? self->months :
+        level == CRON_CALC_TM_DAY ? self->days :
+        level == CRON_CALC_TM_HOUR ? self->hours :
+        level == CRON_CALC_TM_MINUTE ? self->minutes :
+        level == CRON_CALC_TM_SECOND ? self->seconds :
+        level == CRON_CALC_TM_WDAY ? self->weekDays : 0;
+
+    return mask;
+}
+
+/* ---------------------------------------------------------------------------- */
+
+bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_calc_tm_level level, bool rollover)
+{
+    uint64_t mask = cron_calc_get_mask(self, level);
+    int val_min = CRON_CALC_TM_FIELD_MIN(level);
+    bool year_matches = (level == CRON_CALC_TM_YEAR) && !(self->options & CRON_CALC_OPT_WITH_YEARS);
+    int val_max =
+        year_matches ?
+            CRON_CALC_YEAR_MAX :
+        (level == CRON_CALC_TM_DAY) ?
+            cron_calc_month_days(tm_val->tm_year, tm_val->tm_mon) :
+            CRON_CALC_TM_FIELD_MAX(level);
+
+    int* fld = CRON_CALC_TM_FIELD(tm_val, level);
+    int val = rollover ? val_min : *fld;
+
+    /* if no match on this level, it has to be incremented
+       and therefore all levels downwards have to roll over and start from minimum.
+       note, that years never roll over */
+    for (; val <= val_max; val++, rollover = true)
+    {
+        if (year_matches ||
+            CRON_CALC_MATCHES_MASK(val, mask))
+        {
+            *fld = val;
+            if (level == CRON_CALC_TM_SECOND)
+            {
+                return true;
+            }
+            else if (cron_calc_find_next(self, tm_val, level + 1, rollover))
+            {
+                return true;
+            }
+        }
+        else if (level == CRON_CALC_TM_DAY)
+        {
+            /* check weekday also */
+        }
+    }
+
+    /* reached end of the range, increment parent */
+    return false;
+}
+
+/* ---------------------------------------------------------------------------- */
 
 time_t cron_calc_next(const cron_calc* self, time_t after)
 {
-    return (time_t) 0;
+    struct tm* tm_after;
+    time_t start = after + 1;
+
+    if (!self)
+    {
+        return CRON_CALC_INVALID_TIME;
+    }
+
+    tm_after = localtime(&start);
+    if (!tm_after)
+    {
+        return CRON_CALC_INVALID_TIME;
+    }
+
+    /* adjust tm values */
+    tm_after->tm_year += 1900;
+    tm_after->tm_mon += 1;
+
+    if (!cron_calc_find_next(self, tm_after, CRON_CALC_TM_YEAR, false))
+    {
+        return CRON_CALC_INVALID_TIME;
+    }
+
+    /* restore to tm definitions */
+    tm_after->tm_year -= 1900;
+    tm_after->tm_mon -= 1;
+
+    return mktime(tm_after); /* CRON_CALC_INVALID_TIME in case of error */
 }
 
 /* ---------------------------------------------------------------------------- */

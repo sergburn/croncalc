@@ -18,10 +18,10 @@ extern "C" {
 
 typedef enum cron_calc_option
 {
-    CRON_CALC_OPT_DEFAULT,              /*!< Default options, only 5 standard required fields expected */
-    CRON_CALC_OPT_WITH_SECONDS,         /*!< If set, first field is treated as seconds */
-    CRON_CALC_OPT_WITH_YEARS,           /*!< If set, one more field for years is supported */
-    CRON_CALC_OPT_ASSUME_STAR,          /*!< If set, allows to omit the remainder of cron expression,
+    CRON_CALC_OPT_DEFAULT       = 0x0,  /*!< Default options, only 5 standard required fields expected */
+    CRON_CALC_OPT_WITH_SECONDS  = 0x1,  /*!< If set, first field is treated as seconds */
+    CRON_CALC_OPT_WITH_YEARS    = 0x2,  /*!< If set, one more field for years is supported */
+    CRON_CALC_OPT_ASSUME_STAR   = 0x4,  /*!< If set, allows to omit the remainder of cron expression,
                                              which contains only '*'s, full range will be used for such fields */
 
     CRON_CALC_OPT_FULL = CRON_CALC_OPT_WITH_SECONDS | CRON_CALC_OPT_WITH_YEARS
@@ -52,6 +52,8 @@ typedef enum cron_calc_error
     CRON_CALC_ERROR_INVALID_NAME = 6,       /*!< Unknown value name detected */
     CRON_CALC_ERROR_NUMBER_EXPECTED = 7     /*!< Number could not be parsed */
 } cron_calc_error;
+
+#define CRON_CALC_INVALID_TIME ((time_t) -1) /* as defined in mktime() */
 
 /**
  * Supported format:
