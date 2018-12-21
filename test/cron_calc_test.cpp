@@ -37,45 +37,39 @@ int gNumErrors = 0;
 static const char* TM_FORMAT = "%Y-%m-%d_%H:%M:%s";
 static const char* TM_SCAN_FMT = "%u-%u-%u_%u:%u:%u";
 
-bool parseTimeString(const char* tmString, struct tm* tmValue)
+bool parseTimeString(const char* tm_str, struct tm* tm_val)
 {
-    if (sscanf(tmString, TM_SCAN_FMT,
-        &tmValue->tm_year, &tmValue->tm_mon, &tmValue->tm_mday,
-        &tmValue->tm_hour, &tmValue->tm_min, &tmValue->tm_sec) == 6)
+    memset(tm_val, 0, sizeof(struct tm));
+
+    if (sscanf(tm_str, TM_SCAN_FMT,
+        &tm_val->tm_year, &tm_val->tm_mon, &tm_val->tm_mday,
+        &tm_val->tm_hour, &tm_val->tm_min, &tm_val->tm_sec) == 6)
     {
-        CHECK_TRUE(tmValue->tm_year >= 1900);
-        tmValue->tm_year -= 1900;
-        CHECK_TRUE(tmValue->tm_mon >= 1);
-        tmValue->tm_mon -= 1;
+        time_t t;
+
+        CHECK_TRUE(tm_val->tm_year >= 1900);
+        tm_val->tm_year -= 1900;
+        CHECK_TRUE(tm_val->tm_mon >= 1);
+        tm_val->tm_mon -= 1;
+
+        /* normalize to get other fields */
+        t = mktime(tm_val);
+
+        if (t >= (time_t)(0))
+        {
         return true;
     }
-    printf("Can't parse time string '%s'\n", tmString);
+
+        printf("ERROR: Can't decode time %d\n", t);
+         return false;
+    }
+    printf("ERROR: Can't parse time string '%s'\n", tm_str);
     return false;
 }
 
+/* ---------------------------------------------------------------------------- */
+
 #if 0
-void check_next(const char* pattern, const char* str_initial, const char* str_expected)
-{
-    CronCalc cron;
-    const char* err_location = NULL;
-    CHECK_TRUE(CRON_CALC_OK == cron.parse(pattern, &err_location));
-    CHECK_TRUE(NULL == err_location);
-
-    struct tm calnext, expected;
-    CHECK_TRUE(parseTimeString(str_initial, &calnext));
-    CHECK_TRUE(parseTimeString(str_expected, &expected));
-
-    CHECK_TRUE(CRON_CALC_OK == cron.next(&calnext));
-
-    CHECK_TRUE(calnext.tm_year == expected.tm_year);
-    CHECK_TRUE(calnext.tm_mon == expected.tm_mon);
-    CHECK_TRUE(calnext.tm_mday == expected.tm_mday);
-    CHECK_TRUE(calnext.tm_hour == expected.tm_hour);
-    CHECK_TRUE(calnext.tm_min == expected.tm_min);
-    CHECK_TRUE(calnext.tm_sec == expected.tm_sec);
-    CHECK_TRUE(calnext.tm_wday == expected.tm_wday);
-}
-
 void check_same(const char* expr1, const char* expr2)
 {
     CronCalc cron1, cron2;
@@ -104,6 +98,47 @@ void check_invalid(
 
 #define CHECK_INVALID(expr_, opts_, err_, err_offset_) \
     check_invalid(expr_, opts_, err_, err_offset_, __LINE__)
+
+/* ---------------------------------------------------------------------------- */
+
+bool check_next(
+    const char* expr,
+    cron_calc_option_mask options,
+    const char* initial,
+    const char* next1,
+    const char* next2,
+    const char* next3,
+    int lineno)
+{
+    int numErrors = gNumErrors;
+
+    CronCalc cron;
+    const char* err_location = NULL;
+    CHECK_EQ_INT(CRON_CALC_OK, cron.parse(expr, options, &err_location));
+    CHECK_TRUE(NULL == err_location);
+
+    struct tm calinit, calnext1, calnext2, calnext3;
+    CHECK_TRUE(parseTimeString(initial, &calinit));
+    CHECK_TRUE(parseTimeString(next1, &calnext1));
+    CHECK_TRUE(parseTimeString(next2, &calnext2));
+    CHECK_TRUE(parseTimeString(next3, &calnext3));
+
+    time_t tinit = mktime(&calinit);
+    time_t tnext1 = mktime(&calnext1);
+    time_t tnext2 = mktime(&calnext2);
+    time_t tnext3 = mktime(&calnext3);
+
+    CHECK_EQ_INT(tnext1, cron.next(tinit));
+    CHECK_EQ_INT(tnext2, cron.next(tnext1));
+    CHECK_EQ_INT(tnext3, cron.next(tnext2));
+
+    return (numErrors == gNumErrors);
+}
+
+#define CHECK_NEXT(expr_, opts_, start_, n1_, n2_, n3_) \
+    CHECK_TRUE_LN(check_next(expr_, opts_, start_, n1_, n2_, n3_, __LINE__), __LINE__)
+
+/* ---------------------------------------------------------------------------- */
 
 int main()
 {
@@ -177,15 +212,39 @@ int main()
     CHECK_INVALID("* * * MAY-AUF MOY", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
     CHECK_INVALID("* * * MAY-AUG MON-TUF", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 18);
 
+    /* Next */
+
+    CHECK_NEXT("* * * * *", CRON_CALC_OPT_DEFAULT,
+        "2018-12-31_23:58:01",
+        "2018-12-31_23:59:00",
+        "2019-01-01_00:00:00", /* !!! champagne time !!! */
+        "2019-01-01_00:01:00");
+
+    CHECK_NEXT("* * * * * *", CRON_CALC_OPT_WITH_SECONDS,
+        "2018-12-31_23:59:58",
+        "2018-12-31_23:59:59",
+        "2019-01-01_00:00:00", /* !!! champagne time !!! */
+        "2019-01-01_00:00:01");
+
+    CHECK_NEXT("*/2 * * * *", CRON_CALC_OPT_DEFAULT,
+        "2018-12-31_23:57:01",
+        "2018-12-31_23:59:00",
+        "2019-01-01_00:02:00",
+        "2019-01-01_00:03:00");
+
+    CHECK_NEXT("* */2 * * *", CRON_CALC_OPT_DEFAULT,
+        "2018-12-31_21:57:01",
+        "2018-12-31_23:00:00",
+        "2019-01-01_01:00:00",
+        "2019-01-01_03:00:00");
+
+    CHECK_NEXT("10 */2 * * *", CRON_CALC_OPT_DEFAULT,
+        "2018-12-31_21:57:01",
+        "2018-12-31_23:10:00",
+        "2019-01-01_01:10:00",
+        "2019-01-01_03:10:00");
+
 #if 0
-
-
-    CHECK_INVALID("-5 * * * * *", CRON_CALC_ERROR_NUMBER_RANGE, 6);
-    CHECK_INVALID("3-2 */5 * * * *", CRON_CALC_ERROR_NUMBER_RANGE, 6);
-    CHECK_INVALID("/5 * * * * *", CRON_CALC_ERROR_NUMBER_RANGE, 6);
-    CHECK_INVALID("*/0 * * * * *", CRON_CALC_ERROR_NUMBER_RANGE, 6);
-    CHECK_INVALID("*/-0 * * * * *", CRON_CALC_ERROR_NUMBER_RANGE, 6);
-    CHECK_INVALID("* 1 1 0 * *", CRON_CALC_ERROR_NUMBER_RANGE, 6);
 
     check_next("* 1-4 * * * * */15", "2012-07-01_09:53:50", "2012-07-02_01:00:00");
     check_next("* 1-4 * * * * */15", "2012-07-01_09:53:00", "2012-07-02_01:00:00");

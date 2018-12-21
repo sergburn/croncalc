@@ -64,10 +64,43 @@ static const cron_calc_field_def K_CRON_CALC_FIELD_DEFS[CRON_CALC_FIELD_LAST + 1
     { CRON_CALC_YEAR_START, CRON_CALC_YEAR_END, NULL, 0 },                          /* CRON_CALC_FIELD_YEARS */
 };
 
+typedef enum cron_calc_tm_level {
+    CRON_CALC_TM_YEAR,
+    CRON_CALC_TM_MONTH,
+    CRON_CALC_TM_DAY,
+    CRON_CALC_TM_HOUR,
+    CRON_CALC_TM_MINUTE,
+    CRON_CALC_TM_SECOND,
+
+    CRON_CALC_TM_WDAY
+} cron_calc_tm_level;
+
+typedef struct cron_calc_tm_field_def
+{
+    size_t tm_offset;
+    cron_calc_field cron_field;
+} cron_calc_tm_field_def;
+
+static const cron_calc_tm_field_def K_CRON_CALC_TM_FIELDS[CRON_CALC_FIELD_LAST + 1] = {
+    { offsetof(struct tm, tm_year), CRON_CALC_FIELD_YEARS },
+    { offsetof(struct tm, tm_mon),  CRON_CALC_FIELD_MONTHS },
+    { offsetof(struct tm, tm_mday), CRON_CALC_FIELD_DAYS },
+    { offsetof(struct tm, tm_hour), CRON_CALC_FIELD_HOURS },
+    { offsetof(struct tm, tm_min),  CRON_CALC_FIELD_MINUTES },
+    { offsetof(struct tm, tm_sec),  CRON_CALC_FIELD_SECONDS },
+    { offsetof(struct tm, tm_wday), CRON_CALC_FIELD_WDAYS }
+};
+
 /* ---------------------------------------------------------------------------- */
 
 #define CRON_CALC_IS_DIGIT(a_) ((a_) >= '0' && (a_) <= '9')
 #define CRON_CALC_IS_NAME_CHAR(a_) (((a_) >= 'A' && (a_) <= 'Z') || ((a_) >= 'a' && (a_) <= 'z'))
+
+#define CRON_CALC_TM_CRON_FIELD(tm_field_) (K_CRON_CALC_TM_FIELDS[(tm_field_)].cron_field)
+#define CRON_CALC_TM_CRON_FIELD_DEF(tm_field_) (K_CRON_CALC_FIELD_DEFS[CRON_CALC_TM_CRON_FIELD(tm_field_)])
+#define CRON_CALC_TM_FIELD(tm_val_, tm_field_) (int*)((uint8_t*)(tm_val_) + K_CRON_CALC_TM_FIELDS[(int)(tm_field_)].tm_offset)
+#define CRON_CALC_TM_FIELD_MIN(tm_field_) (CRON_CALC_TM_CRON_FIELD_DEF(tm_field_).min)
+#define CRON_CALC_TM_FIELD_MAX(tm_field_) (CRON_CALC_TM_CRON_FIELD_DEF(tm_field_).max)
 
 /* ---------------------------------------------------------------------------- */
 
@@ -333,9 +366,101 @@ cron_calc_error cron_calc_parse(
 
 /* ---------------------------------------------------------------------------- */
 
+bool cron_calc_matches(const cron_calc* self, cron_calc_field field, int val)
+{
+    uint64_t field_value =
+        field == CRON_CALC_FIELD_YEARS ? self->years :
+        field == CRON_CALC_FIELD_MONTHS ? self->months :
+        field == CRON_CALC_FIELD_DAYS ? self->days :
+        field == CRON_CALC_FIELD_HOURS ? self->hours :
+        field == CRON_CALC_FIELD_MINUTES ? self->minutes :
+        field == CRON_CALC_FIELD_SECONDS ? self->seconds :
+        field == CRON_CALC_FIELD_WDAYS ? self->weekDays : 0;
+
+    return (field_value & (uint64_t) val);
+}
+
+/* ---------------------------------------------------------------------------- */
+
+bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_calc_tm_level level)
+{
+    int* fld = CRON_CALC_TM_FIELD(tm_val, level);
+    const cron_calc_field_def* cron_fld = K_CRON_CALC_TM_FIELDS[level].cron_field;
+    for (; *fld < CRON_CALC_TM_FIELD_MIN(level); *fld++)
+    {
+        if (cron_calc_matches(self, CRON_CALC_TM_CRON_FIELD(level), *fld))
+        {
+            cron_calc_rollover(level+1);
+            match = true;
+            break;
+        }
+    }
+}
+
+/* ---------------------------------------------------------------------------- */
+
 time_t cron_calc_next(const cron_calc* self, time_t after)
 {
+    struct tm* tm_after;
+    time_t start = after + 1;
+    cron_calc next = { 0 };
+
+    if (!self)
+    {
     return (time_t) 0;
+}
+
+    tm_after = gmtime(&start);
+    if (!tm_after)
+    {
+        return (time_t) 0;
+    }
+
+    next.years = tm_after->tm_year + 1900;
+    next.months = tm_after->tm_mon + 1;
+    next.days = tm_after->tm_mday;
+    next.hours = tm_after->tm_hour;
+    next.minutes = tm_after->tm_min;
+    next.seconds = tm_after->tm_sec;
+    next.weekDays = tm_after->tm_wday;
+
+    tm_level = YEAR;
+    while (tm_level <= SECOND)
+    {
+        bool match = false;
+
+        if (cron_calc_matches(tm_level))
+        {
+            tm_level++;
+            continue;
+        }
+
+
+
+        /* find match on current level */
+
+
+        if (match)
+        {
+            tm_level++;
+            continue;
+        }
+
+        /* current level should rollover,
+         * but since parent needs to be incremented - do it and
+         * all children will be rolled over, including this one */
+        tm_level--;
+    };
+
+    memset(tm_after, 0, sizeof(struct tm));
+    tm_after->tm_year = next.years - 1900;
+    tm_after->tm_mon = next.months - 1;
+    tm_after->tm_mday = next.days;
+    tm_after->tm_hour = next.hours;
+    tm_after->tm_min = next.minutes;
+    tm_after->tm_sec = next.seconds;
+
+    return mktime(tm_after);
 }
 
 /* ---------------------------------------------------------------------------- */
