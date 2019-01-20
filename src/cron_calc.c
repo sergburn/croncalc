@@ -97,6 +97,33 @@ static const cron_calc_tm_field_def K_CRON_CALC_TM_FIELDS[CRON_CALC_FIELD_LAST +
     { offsetof(struct tm, tm_wday), CRON_CALC_FIELD_WDAYS }
 };
 
+typedef enum cron_calc_tm_level {
+    CRON_CALC_TM_YEAR,
+    CRON_CALC_TM_MONTH,
+    CRON_CALC_TM_DAY,
+    CRON_CALC_TM_HOUR,
+    CRON_CALC_TM_MINUTE,
+    CRON_CALC_TM_SECOND,
+
+    CRON_CALC_TM_WDAY
+} cron_calc_tm_level;
+
+typedef struct cron_calc_tm_field_def
+{
+    size_t tm_offset;
+    cron_calc_field cron_field;
+} cron_calc_tm_field_def;
+
+static const cron_calc_tm_field_def K_CRON_CALC_TM_FIELDS[CRON_CALC_FIELD_LAST + 1] = {
+    { offsetof(struct tm, tm_year), CRON_CALC_FIELD_YEARS },
+    { offsetof(struct tm, tm_mon),  CRON_CALC_FIELD_MONTHS },
+    { offsetof(struct tm, tm_mday), CRON_CALC_FIELD_DAYS },
+    { offsetof(struct tm, tm_hour), CRON_CALC_FIELD_HOURS },
+    { offsetof(struct tm, tm_min),  CRON_CALC_FIELD_MINUTES },
+    { offsetof(struct tm, tm_sec),  CRON_CALC_FIELD_SECONDS },
+    { offsetof(struct tm, tm_wday), CRON_CALC_FIELD_WDAYS }
+};
+
 /* ---------------------------------------------------------------------------- */
 
 #define CRON_CALC_IS_DIGIT(a_) ((a_) >= '0' && (a_) <= '9')
@@ -459,6 +486,39 @@ bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_calc_tm_
 
     /* reached end of the range, increment parent */
     return false;
+}
+
+/* ---------------------------------------------------------------------------- */
+
+bool cron_calc_matches(const cron_calc* self, cron_calc_field field, int val)
+{
+    uint64_t field_value =
+        field == CRON_CALC_FIELD_YEARS ? self->years :
+        field == CRON_CALC_FIELD_MONTHS ? self->months :
+        field == CRON_CALC_FIELD_DAYS ? self->days :
+        field == CRON_CALC_FIELD_HOURS ? self->hours :
+        field == CRON_CALC_FIELD_MINUTES ? self->minutes :
+        field == CRON_CALC_FIELD_SECONDS ? self->seconds :
+        field == CRON_CALC_FIELD_WDAYS ? self->weekDays : 0;
+
+    return (field_value & (uint64_t) val);
+}
+
+/* ---------------------------------------------------------------------------- */
+
+bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_calc_tm_level level)
+{
+    int* fld = CRON_CALC_TM_FIELD(tm_val, level);
+    const cron_calc_field_def* cron_fld = K_CRON_CALC_TM_FIELDS[level].cron_field;
+    for (; *fld < CRON_CALC_TM_FIELD_MIN(level); *fld++)
+    {
+        if (cron_calc_matches(self, CRON_CALC_TM_CRON_FIELD(level), *fld))
+        {
+            cron_calc_rollover(level+1);
+            match = true;
+            break;
+        }
+    }
 }
 
 /* ---------------------------------------------------------------------------- */
