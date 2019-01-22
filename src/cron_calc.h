@@ -50,7 +50,8 @@ typedef enum cron_calc_error
     CRON_CALC_ERROR_EXPR_SHORT = 4,         /*!< Expression too short, not all required fields found */
     CRON_CALC_ERROR_EXPR_LONG = 5,          /*!< Expression too long, did not end after last supported field */
     CRON_CALC_ERROR_INVALID_NAME = 6,       /*!< Unknown value name detected */
-    CRON_CALC_ERROR_NUMBER_EXPECTED = 7     /*!< Number could not be parsed */
+    CRON_CALC_ERROR_NUMBER_EXPECTED = 7,    /*!< Number could not be parsed */
+    CRON_CALC_ERROR_IMPOSSIBLE_DATE = 8     /*!< Date specified in expression never matches, e.g. Nov-31 or 2001-Feb-29 */
 } cron_calc_error;
 
 #define CRON_CALC_INVALID_TIME ((time_t) -1) /* as defined in mktime() */

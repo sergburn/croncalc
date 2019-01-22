@@ -143,8 +143,14 @@ bool check_next(
 
     CronCalc cron;
     const char* err_location = NULL;
-    CHECK_EQ_INT(CRON_CALC_OK, cron.parse(expr, options, &err_location));
+    cron_calc_error err = cron.parse(expr, options, &err_location);
+    CHECK_EQ_INT(CRON_CALC_OK, err);
     CHECK_TRUE(NULL == err_location);
+
+    if (err != CRON_CALC_OK)
+    {
+        return false;
+    }
 
     struct tm calinit, calnext1, calnext2, calnext3;
     CHECK_TRUE(parseTimeString(initial, &calinit));
@@ -259,6 +265,16 @@ int main()
     CHECK_INVALID("* * * * * * *", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_EXPR_LONG, 12);
     CHECK_INVALID("* * * * * * * *", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_EXPR_LONG, 14);
 
+    /* impossible */
+    CHECK_INVALID("* * 30 FEB *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
+    CHECK_INVALID("* * 31 FEB *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
+    CHECK_INVALID("* * 31 APR *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
+    CHECK_INVALID("* * 31 JUN *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
+    CHECK_INVALID("* * 31 SEP *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
+    CHECK_INVALID("* * 31 11 *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 11);
+    CHECK_INVALID("* * 29 FEB * 2001", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 17);
+    CHECK_INVALID("* * 29 FEB * 2001-2003", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 22);
+
     /* Next */
 
     CHECK_NEXT("* * * * *", CRON_CALC_OPT_DEFAULT,
@@ -293,7 +309,7 @@ int main()
         "2019-01-03_02:01:00");
 
     /* same for even days */
-    CHECK_NEXT("1 2 */2 * *", CRON_CALC_OPT_DEFAULT,
+    CHECK_NEXT("1 2 2-31/2 * *", CRON_CALC_OPT_DEFAULT,
         "2018-12-29_21:57:00",
         "2018-12-30_02:01:00",
         "2019-01-02_02:01:00",
