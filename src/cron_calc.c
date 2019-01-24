@@ -32,6 +32,9 @@ enum
     CRON_CALC_YEAR_COUNT = 64,
     CRON_CALC_YEAR_END = CRON_CALC_YEAR_START + CRON_CALC_YEAR_COUNT - 1,
     CRON_CALC_YEAR_MAX = (sizeof(time_t) > 4) ? INT32_MAX : 2038,
+
+    CRON_CALC_OPT_MDAY_STARRED = CRON_CALC_OPT_RESERVED_40,
+    CRON_CALC_OPT_WDAY_STARRED = CRON_CALC_OPT_RESERVED_80,
 };
 
 static const char* const CRON_CALC_DAYS[] = {
@@ -159,6 +162,7 @@ static cron_calc_error cron_calc_set_field(
     uint32_t min,
     uint32_t max,
     uint32_t step,
+    bool is_star,
     cron_calc_field field)
 {
     int i;
@@ -186,12 +190,14 @@ static cron_calc_error cron_calc_set_field(
             break;
         case CRON_CALC_FIELD_DAYS:
             self->days = value;
+            self->options |= is_star ? CRON_CALC_OPT_MDAY_STARRED : 0;
             break;
         case CRON_CALC_FIELD_MONTHS:
             self->months = value;
             break;
         case CRON_CALC_FIELD_WDAYS:
             self->weekDays = value;
+            self->options |= is_star ? CRON_CALC_OPT_WDAY_STARRED : 0;
             break;
         case CRON_CALC_FIELD_YEARS:
             self->years = value;
@@ -208,7 +214,7 @@ static cron_calc_error cron_calc_set_field(
 static void cron_calc_set_field_default(cron_calc* self, cron_calc_field field)
 {
     const cron_calc_field_def* field_def = &K_CRON_CALC_FIELD_DEFS[field];
-    cron_calc_set_field(self, field_def->min, field_def->max, 1, field);
+    cron_calc_set_field(self, field_def->min, field_def->max, 1, true, field);
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -375,7 +381,7 @@ cron_calc_error cron_calc_parse(
         cron_calc_set_field(self, /* match only at seconds 00 */
             CRON_CALC_FIELD_MIN(CRON_CALC_FIELD_SECONDS),
             CRON_CALC_FIELD_MIN(CRON_CALC_FIELD_SECONDS),
-            1,
+            1, true,
             CRON_CALC_FIELD_SECONDS);
         field = CRON_CALC_FIELD_MINUTES;
     }
@@ -399,13 +405,13 @@ cron_calc_error cron_calc_parse(
     while (field <= last_field)
     {
         uint32_t min = 0, max = 0, step = 1;
-        bool is_range = false;
+        bool is_range = false, is_star = false;
 
         if (*p == '*')
         {
             min = CRON_CALC_FIELD_MIN(field);
             max = CRON_CALC_FIELD_MAX(field);
-            is_range = true;
+            is_range = is_star = true;
             p++;
         }
         else
@@ -435,7 +441,7 @@ cron_calc_error cron_calc_parse(
 
         if (*p == 0 || isspace(*p) || *p == ',') /* end of field */
         {
-            err = cron_calc_set_field(self, min, max, step, field);
+            err = cron_calc_set_field(self, min, max, step, is_star, field);
             if (err) break;
 
             if (isspace(*p)) /* field is complete */
@@ -518,6 +524,9 @@ static bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_c
 static bool cron_calc_find_next_day(const cron_calc* self, struct tm* tm_val, bool rollover)
 {
     int month_len = cron_calc_month_days(tm_val->tm_year, tm_val->tm_mon);
+    /* crontab(5): If both fields are restricted (i.e., do not contain the "*" character),
+     * the command will be run when _either_ field matches the current time. */
+    bool either = !(self->options & (CRON_CALC_OPT_MDAY_STARRED | CRON_CALC_OPT_WDAY_STARRED));
 
     if (rollover)
     {
@@ -527,13 +536,14 @@ static bool cron_calc_find_next_day(const cron_calc* self, struct tm* tm_val, bo
 
     for (; tm_val->tm_mday <= month_len; tm_val->tm_mday++, rollover = true)
     {
-        if (CRON_CALC_MATCHES_MASK(tm_val->tm_mday, self->days) ||
-            CRON_CALC_MATCHES_MASK(tm_val->tm_wday, self->weekDays))
+        const bool mday_matches = CRON_CALC_MATCHES_MASK(tm_val->tm_mday, self->days);
+        const bool wday_matches = CRON_CALC_MATCHES_MASK(tm_val->tm_wday, self->weekDays);
+
+        bool matches = either ? mday_matches || wday_matches : mday_matches && wday_matches;
+
+        if (matches && cron_calc_find_next(self, tm_val, CRON_CALC_TM_HOUR, rollover))
         {
-            if (cron_calc_find_next(self, tm_val, CRON_CALC_TM_HOUR, rollover))
-            {
-                return true;
-            }
+            return true;
         }
         tm_val->tm_wday = (tm_val->tm_wday + 1) % 7;
     }

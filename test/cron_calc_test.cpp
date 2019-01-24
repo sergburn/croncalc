@@ -308,12 +308,39 @@ int main()
         "2019-01-01_02:01:00",
         "2019-01-03_02:01:00");
 
-    /* same for even days */
+    CHECK_NEXT("1 2 1-31/2 * *", CRON_CALC_OPT_DEFAULT,
+        "2018-12-29_21:57:00",
+        "2018-12-31_02:01:00",
+        "2019-01-01_02:01:00",
+        "2019-01-03_02:01:00");
+
+    /* Even days */
     CHECK_NEXT("1 2 2-31/2 * *", CRON_CALC_OPT_DEFAULT,
         "2018-12-29_21:57:00",
         "2018-12-30_02:01:00",
         "2019-01-02_02:01:00",
         "2019-01-04_02:01:00");
+
+    /* Both day fields restricted -> match on either of them */
+    CHECK_NEXT("1 2 28-31 * 5", CRON_CALC_OPT_DEFAULT,
+        "2019-01-23_00:00:00",
+        "2019-01-25_02:01:00",  /* FRI */
+        "2019-01-28_02:01:00",
+        "2019-01-29_02:01:00");
+
+    /* Month day unrestricted -> match on both of them */
+    CHECK_NEXT("1 2 * * 5", CRON_CALC_OPT_DEFAULT,
+        "2019-01-23_00:00:00",
+        "2019-01-25_02:01:00",  /* FRI */
+        "2019-02-01_02:01:00",  /* FRI */
+        "2019-02-08_02:01:00"); /* FRI */
+
+    /* Week day unrestricted -> match on both of them */
+    CHECK_NEXT("1 2 2-24 * *", CRON_CALC_OPT_DEFAULT,
+        "2019-01-24_00:00:00",
+        "2019-01-24_02:01:00",
+        "2019-02-02_02:01:00",
+        "2019-02-03_02:01:00");
 
 #if 0
 

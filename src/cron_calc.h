@@ -24,7 +24,12 @@ typedef enum cron_calc_option
     CRON_CALC_OPT_ASSUME_STAR   = 0x4,  /*!< If set, allows to omit the remainder of cron expression,
                                              which contains only '*'s, full range will be used for such fields */
 
-    CRON_CALC_OPT_FULL = CRON_CALC_OPT_WITH_SECONDS | CRON_CALC_OPT_WITH_YEARS
+    CRON_CALC_OPT_FULL = CRON_CALC_OPT_WITH_SECONDS | CRON_CALC_OPT_WITH_YEARS,
+
+    CRON_CALC_OPT_RESERVED_10   = 0x10,
+    CRON_CALC_OPT_RESERVED_20   = 0x20,
+    CRON_CALC_OPT_RESERVED_40   = 0x40,
+    CRON_CALC_OPT_RESERVED_80   = 0x80
 } cron_calc_option;
 
 typedef uint8_t cron_calc_option_mask;
