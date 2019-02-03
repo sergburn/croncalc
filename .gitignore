@@ -36,3 +36,6 @@
 
 # VSCode files
 .vscode/
+
+# Coverage
+cov*.html
