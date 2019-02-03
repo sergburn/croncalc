@@ -342,8 +342,8 @@ static bool cron_calc_is_impossible(cron_calc* self)
     /* The only month is February, but ...  */
     if (self->months == CRON_CALC_MASK(2))
     {
-        /* ... only days 29-31 allowed */
-        const uint64_t feb_days = ~(CRON_CALC_MASK(29) | CRON_CALC_MASK(30) | CRON_CALC_MASK(31));
+        /* ... only days 30-31 allowed */
+        const uint64_t feb_days = ~(CRON_CALC_MASK(30) | CRON_CALC_MASK(31));
         if ((self->days & feb_days) == 0)
         {
             return true;
