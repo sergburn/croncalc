@@ -39,34 +39,33 @@ static const char* TM_SCAN_FMT = "%u-%u-%u_%u:%u:%u";
 
 /* ---------------------------------------------------------------------------- */
 
-bool parseTimeString(const char* tm_str, struct tm* tm_val)
+time_t parseTimeString(const char* tm_str)
 {
-    memset(tm_val, 0, sizeof(struct tm));
+    time_t t = 0;
+    struct tm tm_val = { 0 };
 
     if (sscanf(tm_str, TM_SCAN_FMT,
-        &tm_val->tm_year, &tm_val->tm_mon, &tm_val->tm_mday,
-        &tm_val->tm_hour, &tm_val->tm_min, &tm_val->tm_sec) == 6)
+        &tm_val.tm_year, &tm_val.tm_mon, &tm_val.tm_mday,
+        &tm_val.tm_hour, &tm_val.tm_min, &tm_val.tm_sec) == 6)
     {
-        time_t t;
-
-        CHECK_TRUE(tm_val->tm_year >= 1900);
-        tm_val->tm_year -= 1900;
-        CHECK_TRUE(tm_val->tm_mon >= 1);
-        tm_val->tm_mon -= 1;
+        CHECK_TRUE(tm_val.tm_year >= 1900);
+        tm_val.tm_year -= 1900;
+        CHECK_TRUE(tm_val.tm_mon >= 1);
+        tm_val.tm_mon -= 1;
+        tm_val.tm_isdst = -1;
 
         /* normalize to get other fields */
-        t = mktime(tm_val);
-
-        if (t >= (time_t)(0))
+        t = mktime(&tm_val);
+        if (t == (time_t)(-1))
         {
-            return true;
+            printf("ERROR: Can't make time out of '%s'\n", tm_str);
         }
-
-        printf("ERROR: Can't decode time %d\n", (int) t);
-        return false;
     }
-    printf("ERROR: Can't parse time string '%s'\n", tm_str);
-    return false;
+    else
+    {
+        printf("ERROR: Can't parse time string '%s'\n", tm_str);
+    }
+    return t;
 }
 
 /* ---------------------------------------------------------------------------- */
@@ -134,9 +133,7 @@ bool check_next(
     const char* expr,
     cron_calc_option_mask options,
     const char* initial,
-    const char* next1,
-    const char* next2,
-    const char* next3,
+    const char* next,
     int lineno)
 {
     int numErrors = gNumErrors;
@@ -152,32 +149,42 @@ bool check_next(
         return false;
     }
 
-    struct tm calinit, calnext1, calnext2, calnext3;
-    CHECK_TRUE(parseTimeString(initial, &calinit));
-    CHECK_TRUE(parseTimeString(next1, &calnext1));
-    CHECK_TRUE(parseTimeString(next2, &calnext2));
-    CHECK_TRUE(parseTimeString(next3, &calnext3));
+    time_t tinit = parseTimeString(initial);
+    CHECK_TRUE(tinit > 0);
 
-    time_t tinit = mktime(&calinit);
-    time_t tnext1 = mktime(&calnext1);
-    time_t tnext2 = mktime(&calnext2);
-    time_t tnext3 = mktime(&calnext3);
+    while (next)
+    {
+        time_t tnext = parseTimeString(next);
+        CHECK_TRUE(tnext > 0);
 
-    CHECK_EQ_TIME(tnext1, cron.next(tinit));
-    CHECK_EQ_TIME(tnext2, cron.next(tnext1));
-    CHECK_EQ_TIME(tnext3, cron.next(tnext2));
+        CHECK_EQ_TIME(tnext, cron.next(tinit));
+        tinit = tnext;
+
+        next = strchr(next, ',');
+        if (next)
+        {
+            next++;
+        }
+    }
 
     return (numErrors == gNumErrors);
 }
 
-#define CHECK_NEXT(expr_, opts_, start_, n1_, n2_, n3_) \
-    CHECK_TRUE_LN(check_next(expr_, opts_, start_, n1_, n2_, n3_, __LINE__), __LINE__)
+#define CHECK_NEXT(expr_, opts_, start_, next_) \
+    CHECK_TRUE_LN(check_next(expr_, opts_, start_, next_, __LINE__), __LINE__)
 
 /* ---------------------------------------------------------------------------- */
 
 int main()
 {
+    /* bad invocation */
+    cron_calc cc;
+    const char* err_location = NULL;
+    CHECK_EQ_INT(cron_calc_parse(NULL, "* * * * *", CRON_CALC_OPT_DEFAULT, &err_location), CRON_CALC_ERROR_ARGUMENT);
+    CHECK_EQ_INT(cron_calc_parse(&cc, NULL, CRON_CALC_OPT_DEFAULT, &err_location), CRON_CALC_ERROR_ARGUMENT);
+
     /* bad format */
+    CHECK_EQ_INT(cron_calc_parse(&cc, " * * * * *", CRON_CALC_OPT_DEFAULT, NULL), CRON_CALC_ERROR_NUMBER_EXPECTED);
     CHECK_INVALID(" * * * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_EXPECTED, 0);
     CHECK_INVALID("a * * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_EXPECTED, 0);
     CHECK_INVALID("ab * * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_EXPECTED, 0);
@@ -197,27 +204,36 @@ int main()
     CHECK_INVALID("* * * * a", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 8);
     CHECK_INVALID("* * * * Z", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 8);
     CHECK_INVALID("* * * * ?", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_EXPECTED, 8);
+    CHECK_INVALID("* 2,a * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_EXPECTED, 4);
 
     /* number ranges */
     CHECK_INVALID("60 * * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 0);
     CHECK_INVALID("0-60 * * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 2);
+    CHECK_INVALID("59,60 * * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 3);
     CHECK_INVALID("59 24 * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 3);
     CHECK_INVALID("59 0-24 * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 5);
+    CHECK_INVALID("59 23,24 * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 6);
     CHECK_INVALID("59 23 0 * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 6);
     CHECK_INVALID("59 23 32 * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 6);
     CHECK_INVALID("59 23 0-31 * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 6);
     CHECK_INVALID("59 23 1-32 * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 8);
+    CHECK_INVALID("59 23 31,32 * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 9);
     CHECK_INVALID("59 23 31 0 *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 9);
     CHECK_INVALID("59 23 31 13 *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 9);
     CHECK_INVALID("59 23 31 0-12 *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 9);
     CHECK_INVALID("59 23 31 1-13 *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 11);
+    CHECK_INVALID("59 23 31 12,13 *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 12);
     CHECK_INVALID("59 23 31 12 8", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 12);
     CHECK_INVALID("59 23 31 12 0-8", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 14);
     CHECK_INVALID("60 59 23 31 12 6", CRON_CALC_OPT_WITH_SECONDS, CRON_CALC_ERROR_NUMBER_RANGE, 0);
     CHECK_INVALID("0-60 59 23 31 12 6", CRON_CALC_OPT_WITH_SECONDS, CRON_CALC_ERROR_NUMBER_RANGE, 2);
+    CHECK_INVALID("59,60 59 23 31 12 6", CRON_CALC_OPT_WITH_SECONDS, CRON_CALC_ERROR_NUMBER_RANGE, 3);
     CHECK_INVALID("59 23 31 12 6 1999", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_NUMBER_RANGE, 14);
+    CHECK_INVALID("59 23 31 12 6 2000,1999", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_NUMBER_RANGE, 19);
     CHECK_INVALID("59 23 31 12 6 1999-2063", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_NUMBER_RANGE, 14);
+    CHECK_INVALID("59 23 31 12 6 2000-2063,1999", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_NUMBER_RANGE, 24);
     CHECK_INVALID("59 23 31 12 6 2064", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_NUMBER_RANGE, 14);
+    CHECK_INVALID("59 23 31 12 6 2000,2064", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_NUMBER_RANGE, 19);
     CHECK_INVALID("59 23 31 12 6 2000-2064", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_NUMBER_RANGE, 19);
     CHECK_INVALID("59 59 23 31 12 6 1999", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 17);
     CHECK_INVALID("59 59 23 31 12 6 1999-2063", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 17);
@@ -241,11 +257,17 @@ int main()
     CHECK_INVALID("* * * M *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 6);
     CHECK_INVALID("* * * MA *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 6);
     CHECK_INVALID("* * * MAN *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 6);
+    CHECK_INVALID("* * * MAY,B *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
+    CHECK_INVALID("* * * MAY,aB *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
+    CHECK_INVALID("* * * MAY,ApP *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
+    CHECK_INVALID("* * * MAY,ABr *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
     CHECK_INVALID("* * * MAY M", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
     CHECK_INVALID("* * * MAY MO", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
     CHECK_INVALID("* * * MAY MOY", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
     CHECK_INVALID("* * * MAY-AUF MOY", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
     CHECK_INVALID("* * * MAY-AUG MON-TUF", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 18);
+    CHECK_INVALID("* * * MAY-AUG,JAP *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 14);
+    CHECK_INVALID("* * * MAY-AUG,JAN-DEE *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 18);
 
     /* short */
     CHECK_INVALID("* * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_EXPR_SHORT, 7);
@@ -267,9 +289,9 @@ int main()
 
     /* impossible */
     CHECK_INVALID("* * 30 FEB *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
-    CHECK_INVALID("* * 31 FEB *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
-    CHECK_INVALID("* * 31 APR *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
-    CHECK_INVALID("* * 31 JUN *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
+    CHECK_INVALID("* * 31 FeB *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
+    CHECK_INVALID("* * 31 APr *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
+    CHECK_INVALID("* * 31 jUN *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
     CHECK_INVALID("* * 31 SEP *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 12);
     CHECK_INVALID("* * 31 11 *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 11);
     CHECK_INVALID("* * 29 FEB * 2001", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_IMPOSSIBLE_DATE, 17);
@@ -279,68 +301,100 @@ int main()
 
     CHECK_NEXT("* * * * *", CRON_CALC_OPT_DEFAULT,
         "2018-12-31_23:58:00",
-        "2018-12-31_23:59:00",
-        "2019-01-01_00:00:00", /* !!! champagne time !!! */
+        "2018-12-31_23:59:00,"
+        "2019-01-01_00:00:00," /* !!! champagne time !!! */
         "2019-01-01_00:01:00");
 
     CHECK_NEXT("* * * * * *", CRON_CALC_OPT_WITH_SECONDS,
         "2018-12-31_23:59:58",
-        "2018-12-31_23:59:59",
-        "2019-01-01_00:00:00", /* !!! champagne time !!! */
+        "2018-12-31_23:59:59,"
+        "2019-01-01_00:00:00," /* !!! champagne time !!! */
         "2019-01-01_00:00:01");
 
     CHECK_NEXT("*/2 * * * *", CRON_CALC_OPT_DEFAULT,
         "2018-12-31_23:57:00",
-        "2018-12-31_23:58:00",
-        "2019-01-01_00:00:00",
+        "2018-12-31_23:58:00,"
+        "2019-01-01_00:00:00,"
         "2019-01-01_00:02:00");
 
     CHECK_NEXT("0 */2 * * *", CRON_CALC_OPT_DEFAULT,
         "2018-12-31_21:57:00",
-        "2018-12-31_22:00:00",
-        "2019-01-01_00:00:00",
+        "2018-12-31_22:00:00,"
+        "2019-01-01_00:00:00,"
         "2019-01-01_02:00:00");
 
     /* this means 'every odd date' or 'every 2nd day of month', but NOT 'every two days' */
     CHECK_NEXT("1 2 */2 * *", CRON_CALC_OPT_DEFAULT,
         "2018-12-29_21:57:00",
-        "2018-12-31_02:01:00",
-        "2019-01-01_02:01:00",
+        "2018-12-31_02:01:00,"
+        "2019-01-01_02:01:00,"
         "2019-01-03_02:01:00");
 
     CHECK_NEXT("1 2 1-31/2 * *", CRON_CALC_OPT_DEFAULT,
         "2018-12-29_21:57:00",
-        "2018-12-31_02:01:00",
-        "2019-01-01_02:01:00",
+        "2018-12-31_02:01:00,"
+        "2019-01-01_02:01:00,"
         "2019-01-03_02:01:00");
 
     /* Even days */
     CHECK_NEXT("1 2 2-31/2 * *", CRON_CALC_OPT_DEFAULT,
         "2018-12-29_21:57:00",
-        "2018-12-30_02:01:00",
-        "2019-01-02_02:01:00",
+        "2018-12-30_02:01:00,"
+        "2019-01-02_02:01:00,"
         "2019-01-04_02:01:00");
 
     /* Both day fields restricted -> match on either of them */
     CHECK_NEXT("1 2 28-31 * 5", CRON_CALC_OPT_DEFAULT,
         "2019-01-23_00:00:00",
-        "2019-01-25_02:01:00",  /* FRI */
-        "2019-01-28_02:01:00",
+        "2019-01-25_02:01:00,"  /* FRI */
+        "2019-01-28_02:01:00,"
         "2019-01-29_02:01:00");
 
     /* Month day unrestricted -> match on both of them */
     CHECK_NEXT("1 2 * * 5", CRON_CALC_OPT_DEFAULT,
         "2019-01-23_00:00:00",
-        "2019-01-25_02:01:00",  /* FRI */
-        "2019-02-01_02:01:00",  /* FRI */
+        "2019-01-25_02:01:00,"  /* FRI */
+        "2019-02-01_02:01:00,"  /* FRI */
         "2019-02-08_02:01:00"); /* FRI */
 
     /* Week day unrestricted -> match on both of them */
     CHECK_NEXT("1 2 2-24 * *", CRON_CALC_OPT_DEFAULT,
         "2019-01-24_00:00:00",
-        "2019-01-24_02:01:00",
-        "2019-02-02_02:01:00",
+        "2019-01-24_02:01:00,"
+        "2019-02-02_02:01:00,"
         "2019-02-03_02:01:00");
+
+    /* 31st of a month */
+    CHECK_NEXT("1 0 31 * *", CRON_CALC_OPT_DEFAULT,
+        "2020-01-01_00:00:00",
+        "2020-01-31_00:01:00,"
+        "2020-03-31_00:01:00,"
+        "2020-05-31_00:01:00,"
+        "2020-07-31_00:01:00,"
+        "2020-08-31_00:01:00,"
+        "2020-10-31_00:01:00,"
+        "2020-12-31_00:01:00");
+
+    /* 30th of a month */
+    CHECK_NEXT("0 12 30 * *", CRON_CALC_OPT_DEFAULT,
+        "2020-01-01_00:00:00",
+        "2020-01-30_12:00:00,"
+        "2020-03-30_12:00:00,2020-04-30_12:00:00,2020-05-30_12:00:00,"
+        "2020-06-30_12:00:00,2020-07-30_12:00:00,2020-08-30_12:00:00,"
+        "2020-09-30_12:00:00,2020-10-30_12:00:00,2020-11-30_12:00:00,"
+        "2020-12-30_12:00:00");
+
+    /* 29th of a month */
+    CHECK_NEXT("0 0 29 * *", CRON_CALC_OPT_DEFAULT,
+        "2019-01-01_00:00:00",
+        "2019-01-29_00:00:00,"
+        "2019-03-29_00:00:00,"
+        "2019-04-29_00:00:00,2019-05-29_00:00:00,2019-06-29_00:00:00,"
+        "2019-07-29_00:00:00,2019-08-29_00:00:00,2019-09-29_00:00:00,"
+        "2019-10-29_00:00:00,2019-11-29_00:00:00,2019-12-29_00:00:00,"
+        "2020-01-29_00:00:00,"
+        "2020-02-29_00:00:00,"
+        "2020-03-29_00:00:00");
 
 #if 0
 

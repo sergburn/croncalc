@@ -211,14 +211,6 @@ static cron_calc_error cron_calc_set_field(
 
 /* ---------------------------------------------------------------------------- */
 
-static void cron_calc_set_field_default(cron_calc* self, cron_calc_field field)
-{
-    const cron_calc_field_def* field_def = &K_CRON_CALC_FIELD_DEFS[field];
-    cron_calc_set_field(self, field_def->min, field_def->max, 1, true, field);
-}
-
-/* ---------------------------------------------------------------------------- */
-
 static cron_calc_error cron_calc_parse_limited_number(const char** pp, uint32_t* value, uint32_t minimum, uint32_t maximum)
 {
     uint32_t val = 0;
@@ -277,9 +269,9 @@ static cron_calc_error cron_calc_parse_name(const char** pp, uint32_t* value, co
     for (i = 0; i < field_def->names_count; i++)
     {
         const char* fname = field_def->names[i];
-        if ((fname[0] == name[0] || fname[0] == name[0] + CRON_CALC_NAME_UPCASE) &&
-            (fname[1] == name[1] || fname[1] == name[1] + CRON_CALC_NAME_UPCASE) &&
-            (fname[2] == name[2] || fname[2] == name[2] + CRON_CALC_NAME_UPCASE))
+        if ((fname[0] == name[0] || fname[0] == name[0] - CRON_CALC_NAME_UPCASE) &&
+            (fname[1] == name[1] || fname[1] == name[1] - CRON_CALC_NAME_UPCASE) &&
+            (fname[2] == name[2] || fname[2] == name[2] - CRON_CALC_NAME_UPCASE))
         {
             *value = i + field_def->names_first_index;
             *pp = p;
@@ -374,6 +366,11 @@ cron_calc_error cron_calc_parse(
     cron_calc_field field = CRON_CALC_FIELD_SECONDS;
     cron_calc_field last_field = CRON_CALC_FIELD_YEARS;
 
+    if (!self || !expr)
+    {
+        return CRON_CALC_ERROR_ARGUMENT;
+    }
+
     self->options = options;
 
     if (!(options & CRON_CALC_OPT_WITH_SECONDS))
@@ -395,11 +392,6 @@ cron_calc_error cron_calc_parse(
     if (err_location)
     {
         *err_location = NULL;
-    }
-
-    if (!self || !expr)
-    {
-        return CRON_CALC_ERROR_ARGUMENT;
     }
 
     while (field <= last_field)
@@ -455,6 +447,7 @@ cron_calc_error cron_calc_parse(
             }
             else /* (*p == 0) -> expression complete */
             {
+                field++;
                 break;
             }
         }
@@ -465,17 +458,9 @@ cron_calc_error cron_calc_parse(
         }
     }
 
-    if (!err && (options & CRON_CALC_OPT_ASSUME_STAR))
-    {
-        for (; field < last_field; field++)
-        {
-            cron_calc_set_field_default(self, field);
-        }
-    }
-
     if (!err)
     {
-        if (field < last_field)
+        if (field <= last_field)
         {
             err = CRON_CALC_ERROR_EXPR_SHORT;
         }
@@ -629,22 +614,6 @@ static bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_c
 
 /* ---------------------------------------------------------------------------- */
 
-bool cron_calc_matches(const cron_calc* self, cron_calc_field field, int val)
-{
-    uint64_t field_value =
-        field == CRON_CALC_FIELD_YEARS ? self->years :
-        field == CRON_CALC_FIELD_MONTHS ? self->months :
-        field == CRON_CALC_FIELD_DAYS ? self->days :
-        field == CRON_CALC_FIELD_HOURS ? self->hours :
-        field == CRON_CALC_FIELD_MINUTES ? self->minutes :
-        field == CRON_CALC_FIELD_SECONDS ? self->seconds :
-        field == CRON_CALC_FIELD_WDAYS ? self->weekDays : 0;
-
-    return (field_value & (uint64_t) val);
-}
-
-/* ---------------------------------------------------------------------------- */
-
 time_t cron_calc_next(const cron_calc* self, time_t after)
 {
     struct tm* tm_after;
@@ -673,6 +642,7 @@ time_t cron_calc_next(const cron_calc* self, time_t after)
     /* restore to tm definitions */
     tm_after->tm_year -= 1900;
     tm_after->tm_mon -= 1;
+    tm_after->tm_isdst = -1;
 
     return mktime(tm_after); /* CRON_CALC_INVALID_TIME in case of error */
 }
