@@ -173,6 +173,10 @@ static cron_calc_error cron_calc_set_field(
     {
         return CRON_CALC_ERROR_NUMBER_RANGE;
     }
+    if (max < min)
+    {
+        return CRON_CALC_ERROR_NUMBER_RANGE;
+    }
 
     for (i = min; i <= max; i += step)
     {
@@ -183,27 +187,27 @@ static cron_calc_error cron_calc_set_field(
     switch (field)
     {
         case CRON_CALC_FIELD_MINUTES:
-            self->minutes = value;
+            self->minutes |= value;
             break;
         case CRON_CALC_FIELD_HOURS:
-            self->hours = value;
+            self->hours |= value;
             break;
         case CRON_CALC_FIELD_DAYS:
-            self->days = value;
+            self->days |= value;
             self->options |= is_star ? CRON_CALC_OPT_MDAY_STARRED : 0;
             break;
         case CRON_CALC_FIELD_MONTHS:
-            self->months = value;
+            self->months |= value;
             break;
         case CRON_CALC_FIELD_WDAYS:
-            self->weekDays = value;
+            self->weekDays |= value;
             self->options |= is_star ? CRON_CALC_OPT_WDAY_STARRED : 0;
             break;
         case CRON_CALC_FIELD_YEARS:
-            self->years = value;
+            self->years |= value;
             break;
         case CRON_CALC_FIELD_SECONDS:
-            self->seconds = value;
+            self->seconds |= value;
             break;
     }
     return CRON_CALC_OK;

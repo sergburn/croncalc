@@ -41,7 +41,7 @@ static const char* TM_SCAN_FMT = "%u-%u-%u_%u:%u:%u";
 
 time_t parseTimeString(const char* tm_str)
 {
-    time_t t = 0;
+    time_t t = CRON_CALC_INVALID_TIME;
     struct tm tm_val = { 0 };
 
     if (sscanf(tm_str, TM_SCAN_FMT,
@@ -56,7 +56,7 @@ time_t parseTimeString(const char* tm_str)
 
         /* normalize to get other fields */
         t = mktime(&tm_val);
-        if (t == (time_t)(-1))
+        if (t == CRON_CALC_INVALID_TIME)
         {
             printf("ERROR: Can't make time out of '%s'\n", tm_str);
         }
@@ -143,6 +143,10 @@ bool check_next(
     cron_calc_error err = cron.parse(expr, options, &err_location);
     CHECK_EQ_INT(CRON_CALC_OK, err);
     CHECK_TRUE(NULL == err_location);
+    if (NULL != err_location)
+    {
+        printf("ERROR at char %d: '%s'\n", err_location - expr, err_location);
+    }
 
     if (err != CRON_CALC_OK)
     {
@@ -150,12 +154,17 @@ bool check_next(
     }
 
     time_t tinit = parseTimeString(initial);
-    CHECK_TRUE(tinit > 0);
+    CHECK_TRUE(tinit != CRON_CALC_INVALID_TIME);
 
     while (next)
     {
-        time_t tnext = parseTimeString(next);
-        CHECK_TRUE(tnext > 0);
+        time_t tnext = CRON_CALC_INVALID_TIME;
+
+        if (*next != '-')
+        {
+            tnext = parseTimeString(next);
+            CHECK_TRUE(tnext != CRON_CALC_INVALID_TIME);
+        }
 
         CHECK_EQ_TIME(tnext, cron.next(tinit));
         tinit = tnext;
@@ -239,6 +248,16 @@ int main()
     CHECK_INVALID("59 59 23 31 12 6 1999-2063", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 17);
     CHECK_INVALID("59 59 23 31 12 6 2064", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 17);
     CHECK_INVALID("59 59 23 31 12 6 2000-2064", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 22);
+    CHECK_INVALID("59-58 * * * * * *", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 5); /* after wrong number is parsed */
+    CHECK_INVALID("59-0 * * * * * *", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 4);
+    CHECK_INVALID("* 59-58 * * * * *", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 7);
+    CHECK_INVALID("* * 23-1 * * * *", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 8);
+    CHECK_INVALID("* * * 30-1 * * *", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 10);
+    CHECK_INVALID("* * * * 10-4 * *", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 12);
+    CHECK_INVALID("* * * * OCT-APR * *", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 15);
+    CHECK_INVALID("* * * * * 6-0 *", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 13);
+    CHECK_INVALID("* * * * * SAT-SUN *", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 17);
+    CHECK_INVALID("* * * * * * 2019-2018", CRON_CALC_OPT_FULL, CRON_CALC_ERROR_NUMBER_RANGE, 21);
 
     /* steps */
     CHECK_INVALID("*/0 * * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_RANGE, 2);
@@ -268,6 +287,9 @@ int main()
     CHECK_INVALID("* * * MAY-AUG MON-TUF", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 18);
     CHECK_INVALID("* * * MAY-AUG,JAP *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 14);
     CHECK_INVALID("* * * MAY-AUG,JAN-DEE *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 18);
+    CHECK_INVALID("* * * MON *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 6);
+    CHECK_INVALID("* * * MAY-FRI *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
+    CHECK_INVALID("* * * AUG AUG", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
 
     /* short */
     CHECK_INVALID("* * * *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_EXPR_SHORT, 7);
@@ -404,7 +426,7 @@ int main()
         "2008-02-29_00:00:00,"
         "2012-02-29_00:00:00");
 
-    /* Every 15 minute */
+    /* Every 15 minutes */
     CHECK_NEXT("*/15 * * * *", CRON_CALC_OPT_DEFAULT,
         "2018-12-31_23:29:00",
         "2018-12-31_23:30:00,"
@@ -419,6 +441,85 @@ int main()
         "2019-01-01_00:00:00,"
         "2019-01-01_00:00:30,"
         "2019-01-01_00:01:00");
+
+    /* Ranges */
+    CHECK_NEXT("5,10 5-10 * * *", CRON_CALC_OPT_DEFAULT,
+        "2018-12-31_23:00:00",
+        "2019-01-01_05:05:00,2019-01-01_05:10:00,"
+        "2019-01-01_06:05:00,2019-01-01_06:10:00,"
+        "2019-01-01_07:05:00,2019-01-01_07:10:00,"
+        "2019-01-01_08:05:00,2019-01-01_08:10:00,"
+        "2019-01-01_09:05:00,2019-01-01_09:10:00,"
+        "2019-01-01_10:05:00,2019-01-01_10:10:00,"
+        "2019-01-02_05:05:00,2019-01-02_05:10:00");
+
+    CHECK_NEXT("5,10 5-10/2 * * * *", CRON_CALC_OPT_WITH_SECONDS,
+        "2018-12-31_23:00:00",
+        "2018-12-31_23:05:05,2018-12-31_23:05:10,"
+        "2018-12-31_23:07:05,2018-12-31_23:07:10,"
+        "2018-12-31_23:09:05,2018-12-31_23:09:10,"
+        "2019-01-01_00:05:05,2019-01-01_00:05:10");
+
+    CHECK_NEXT("0 0 5-10,21,30-31 * *", CRON_CALC_OPT_DEFAULT,
+        "2018-12-30_23:00:00",
+        "2018-12-31_00:00:00,"
+        "2019-01-05_00:00:00,2019-01-06_00:00:00,2019-01-07_00:00:00,"
+        "2019-01-08_00:00:00,2019-01-09_00:00:00,2019-01-10_00:00:00,"
+        "2019-01-21_00:00:00,2019-01-30_00:00:00,2019-01-31_00:00:00,"
+        "2019-02-05_00:00:00,2019-02-06_00:00:00,2019-02-07_00:00:00,"
+        "2019-02-08_00:00:00,2019-02-09_00:00:00,2019-02-10_00:00:00,"
+        "2019-02-21_00:00:00,"
+        "2019-03-05_00:00:00,2019-03-06_00:00:00");
+
+    CHECK_NEXT("0 0 1,31 FEB-AUG/2,OCT,11 *", CRON_CALC_OPT_DEFAULT,
+        "2018-12-30_23:00:00",
+        "2019-02-01_00:00:00,"
+        "2019-04-01_00:00:00,"
+        "2019-06-01_00:00:00,"
+        "2019-08-01_00:00:00,2019-08-31_00:00:00,"
+        "2019-10-01_00:00:00,2019-10-31_00:00:00,"
+        "2019-11-01_00:00:00,"
+        "2020-02-01_00:00:00");
+
+    CHECK_NEXT("0 10 * * MON-FRI", CRON_CALC_OPT_DEFAULT,
+        "2018-12-30_23:00:00",
+        "2018-12-31_10:00:00,"
+        "2019-01-01_10:00:00,2019-01-02_10:00:00,"
+        "2019-01-03_10:00:00,2019-01-04_10:00:00,"
+        "2019-01-07_10:00:00,2019-01-08_10:00:00")
+
+    CHECK_NEXT("0 10 * * MON-WED,4,5", CRON_CALC_OPT_DEFAULT,
+        "2018-12-30_23:00:00",
+        "2018-12-31_10:00:00,"
+        "2019-01-01_10:00:00,2019-01-02_10:00:00,"
+        "2019-01-03_10:00:00,2019-01-04_10:00:00,"
+        "2019-01-07_10:00:00,2019-01-08_10:00:00")
+
+    CHECK_NEXT("0 12 * * SAT,SUN", CRON_CALC_OPT_DEFAULT,
+        "2018-12-30_23:00:00",
+        "2019-01-05_12:00:00,2019-01-06_12:00:00,"
+        "2019-01-12_12:00:00")
+
+    /* Exact points */
+    CHECK_NEXT("59 23 31 12 *", CRON_CALC_OPT_DEFAULT,
+        "2018-12-30_23:00:00",
+        "2018-12-31_23:59:00,2019-12-31_23:59:00,2020-12-31_23:59:00,2021-12-31_23:59:00");
+
+    CHECK_NEXT("58 59 23 31 12 *", CRON_CALC_OPT_WITH_SECONDS,
+        "2018-12-30_23:00:00",
+        "2018-12-31_23:59:58,2019-12-31_23:59:58,2020-12-31_23:59:58,2021-12-31_23:59:58");
+
+    CHECK_NEXT("59 23 31 12 * 2020", CRON_CALC_OPT_WITH_YEARS,
+        "2018-12-30_23:00:00",
+        "2020-12-31_23:59:00,-,2020-12-31_23:59:00,-");
+
+    CHECK_NEXT("* 12 * * *", CRON_CALC_OPT_DEFAULT,
+        "2018-12-30_23:00:00",
+        "2018-12-31_12:00:00,2018-12-31_12:01:00,2018-12-31_12:02:00");
+
+    CHECK_NEXT("* * 12 * * *", CRON_CALC_OPT_WITH_SECONDS,
+        "2018-12-30_23:00:00",
+        "2018-12-31_12:00:00,2018-12-31_12:00:01,2018-12-31_12:00:02");
 
 #if 0
 
