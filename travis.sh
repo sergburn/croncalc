@@ -10,7 +10,7 @@ find . -iname "*.gcov" | xargs rm -f
 find . -iname "*.gcda" | xargs rm -f
 find . -iname "*.gcno" | xargs rm -f
 
-./build.sh clean -G Ninja -DCRON_CALC_WITH_COVERAGE=1
+./build.sh clean -DCRON_CALC_WITH_COVERAGE=1
 
 cd .cmake
 ./cron_calc_test
