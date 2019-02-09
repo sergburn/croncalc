@@ -13,6 +13,7 @@ find . -iname "*.gc??" | xargs rm -f
 cd .cmake
 ./cron_calc_test
 
+ls -lR
 find . -iname "*.obj" > obj_files
 cat obj_files
 cat obj_files | xargs gcov -b -c
