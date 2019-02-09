@@ -65,13 +65,13 @@ typedef struct cron_calc_field_def
 } cron_calc_field_def;
 
 static const cron_calc_field_def K_CRON_CALC_FIELD_DEFS[CRON_CALC_FIELD_LAST + 1] = {
-    { 0,        59,     NULL,               0 },                       /* CRON_CALC_FIELD_SECONDS */
-    { 0,        59,     NULL,               0 },                       /* CRON_CALC_FIELD_MINUTES */
-    { 0,        23,     NULL,               0 },                       /* CRON_CALC_FIELD_HOURS */
-    { 1,        31,     NULL,               0 },                       /* CRON_CALC_FIELD_DAYS */
-    { 1,        12,     CRON_CALC_MONTHS,   CRON_CALC_MONTHS_NUM },    /* CRON_CALC_FIELD_MONTHS */
-    { 0,        6,      CRON_CALC_DAYS,     CRON_CALC_DAYS_NUM },      /* CRON_CALC_FIELD_WDAYS */
-    { CRON_CALC_YEAR_START, CRON_CALC_YEAR_END, NULL, 0 },             /* CRON_CALC_FIELD_YEARS */
+    { 0, 59 },                                                  /* CRON_CALC_FIELD_SECONDS */
+    { 0, 59 },                                                  /* CRON_CALC_FIELD_MINUTES */
+    { 0, 23 },                                                  /* CRON_CALC_FIELD_HOURS */
+    { 1, 31 },                                                  /* CRON_CALC_FIELD_DAYS */
+    { 1, 12,    CRON_CALC_MONTHS,   CRON_CALC_MONTHS_NUM },     /* CRON_CALC_FIELD_MONTHS */
+    { 0,  6,    CRON_CALC_DAYS,     CRON_CALC_DAYS_NUM },       /* CRON_CALC_FIELD_WDAYS */
+    { CRON_CALC_YEAR_START, CRON_CALC_YEAR_END },               /* CRON_CALC_FIELD_YEARS */
 };
 
 typedef enum cron_calc_tm_level {
@@ -186,6 +186,9 @@ static cron_calc_error cron_calc_set_field(
     /* ranges checked at parsing */
     switch (field)
     {
+        case CRON_CALC_FIELD_SECONDS:
+            self->seconds |= value;
+            break;
         case CRON_CALC_FIELD_MINUTES:
             self->minutes |= value;
             break;
@@ -205,9 +208,6 @@ static cron_calc_error cron_calc_set_field(
             break;
         case CRON_CALC_FIELD_YEARS:
             self->years |= value;
-            break;
-        case CRON_CALC_FIELD_SECONDS:
-            self->seconds |= value;
             break;
     }
     return CRON_CALC_OK;

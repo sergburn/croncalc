@@ -145,7 +145,7 @@ bool check_next(
     CHECK_TRUE(NULL == err_location);
     if (NULL != err_location)
     {
-        printf("ERROR at char %d: '%s'\n", err_location - expr, err_location);
+        printf("ERROR at char %z: '%s'\n", err_location - expr, err_location);
     }
 
     if (err != CRON_CALC_OK)

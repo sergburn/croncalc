@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
-set -ev
+set -e
 
 if [ "$1" == "clean" ]; then
+    echo "Clean build!"
     rm -rf .cmake
     shift
 fi

@@ -39,3 +39,5 @@
 
 # Coverage
 cov*.html
+coverage.info
+cov/
