@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Copyright (c) 2018 Sergey Burnevsky (sergey.burnevsky @ gmail.com)
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
 
 set -e
 
@@ -15,5 +19,3 @@ fi
 cd .cmake
 cmake .. $@
 cmake --build .
-
-./cron_calc_test

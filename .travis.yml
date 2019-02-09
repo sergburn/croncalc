@@ -13,4 +13,11 @@ matrix:
       compiler: clang
 
 script:
-  - ./build.sh
+  - ./travis.sh
+
+env:
+  global:
+    CODECOV_TOKEN="2de04452-c6a6-403b-aeb1-423911776c76"
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

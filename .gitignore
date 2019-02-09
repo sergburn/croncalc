@@ -41,3 +41,4 @@
 cov*.html
 coverage.info
 cov/
+**/*.gcov
