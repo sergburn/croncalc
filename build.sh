@@ -4,7 +4,7 @@
 # This software is released under the MIT License.
 # https://opensource.org/licenses/MIT
 
-set -e
+set -ev
 
 if [ "$1" == "clean" ]; then
     echo "Clean build!"

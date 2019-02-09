@@ -4,17 +4,15 @@
 # This software is released under the MIT License.
 # https://opensource.org/licenses/MIT
 
-set -e
+set -ev
 
-find . -iname "*.gcov" | xargs rm -f
-find . -iname "*.gcda" | xargs rm -f
-find . -iname "*.gcno" | xargs rm -f
+find . -iname "*.gc??" | xargs rm -f
 
-./build.sh clean -DCRON_CALC_WITH_COVERAGE=1
+./build.sh clean -DCRON_CALC_WITH_COVERAGE=1 $@
 
 cd .cmake
 ./cron_calc_test
 
-find . -iname "*.obj" | xargs gcov
+find . -iname "*.obj" | xargs gcov -b -c
 
 bash <(curl -s https://codecov.io/bash)
