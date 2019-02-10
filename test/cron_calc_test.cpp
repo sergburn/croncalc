@@ -133,8 +133,7 @@ bool check_next(
     const char* expr,
     cron_calc_option_mask options,
     const char* initial,
-    const char* next,
-    int lineno)
+    const char* next)
 {
     int numErrors = gNumErrors;
 
@@ -180,17 +179,69 @@ bool check_next(
 }
 
 #define CHECK_NEXT(expr_, opts_, start_, next_) \
-    CHECK_TRUE_LN(check_next(expr_, opts_, start_, next_, __LINE__), __LINE__)
+    CHECK_TRUE_LN(check_next(expr_, opts_, start_, next_), __LINE__)
+
+/* ---------------------------------------------------------------------------- */
+
+bool check_same(
+    const char* expr1,
+    cron_calc_option_mask options1,
+    const char* expr2,
+    cron_calc_option_mask options2)
+{
+    int numErrors = gNumErrors;
+
+    cron_calc cc1 = { 0 }, cc2 = { 0 };
+    const char* err_location = NULL;
+    cron_calc_error err = CRON_CALC_OK;
+    bool same = false;
+
+    err = cron_calc_parse(&cc1, expr1, options1, &err_location);
+    CHECK_EQ_INT(CRON_CALC_OK, err);
+    CHECK_TRUE(NULL == err_location);
+    if (NULL != err_location)
+    {
+        printf("ERROR1 at char %u: '%s'\n", (uint32_t)(err_location - expr1), err_location);
+    }
+
+    err = cron_calc_parse(&cc2, expr2, options2, &err_location);
+    CHECK_EQ_INT(CRON_CALC_OK, err);
+    CHECK_TRUE(NULL == err_location);
+    if (NULL != err_location)
+    {
+        printf("ERROR2 at char %u: '%s'\n", (uint32_t)(err_location - expr2), err_location);
+    }
+
+    CHECK_TRUE(same = cron_calc_is_same(&cc1, &cc2));
+    if (!same)
+    {
+        CHECK_EQ_INT(cc1.seconds, cc2.seconds);
+        CHECK_EQ_INT(cc1.minutes, cc2.minutes);
+        CHECK_EQ_INT(cc1.hours, cc2.hours);
+        CHECK_EQ_INT(cc1.days, cc2.days);
+        CHECK_EQ_INT(cc1.weekDays, cc2.weekDays);
+        CHECK_EQ_INT(cc1.months, cc2.months);
+        CHECK_EQ_INT(cc1.years, cc2.years);
+        CHECK_EQ_INT(cc1.options, cc2.options);
+    }
+
+    return (numErrors == gNumErrors);
+}
+
+#define CHECK_SAME(expr1_, opts1_, expr2_, opts2_) \
+    CHECK_TRUE_LN(check_same(expr1_, opts1_, expr2_, opts2_), __LINE__)
 
 /* ---------------------------------------------------------------------------- */
 
 int main()
 {
     /* bad invocation */
-    cron_calc cc;
+    cron_calc cc, cc2;
     const char* err_location = NULL;
     CHECK_EQ_INT(cron_calc_parse(NULL, "* * * * *", CRON_CALC_OPT_DEFAULT, &err_location), CRON_CALC_ERROR_ARGUMENT);
     CHECK_EQ_INT(cron_calc_parse(&cc, NULL, CRON_CALC_OPT_DEFAULT, &err_location), CRON_CALC_ERROR_ARGUMENT);
+    CHECK_EQ_INT(cron_calc_next(NULL, 1549747649), CRON_CALC_INVALID_TIME);
+    CHECK_EQ_INT(cron_calc_next(&cc, -2), CRON_CALC_INVALID_TIME);
 
     /* bad format */
     CHECK_EQ_INT(cron_calc_parse(&cc, " * * * * *", CRON_CALC_OPT_DEFAULT, NULL), CRON_CALC_ERROR_NUMBER_EXPECTED);
@@ -521,81 +572,53 @@ int main()
         "2018-12-30_23:00:00",
         "2018-12-31_12:00:00,2018-12-31_12:00:01,2018-12-31_12:00:02");
 
-#if 0
+    /* Synonyms */
+    CHECK_SAME(
+        "* * * 1-12 *", CRON_CALC_OPT_DEFAULT,
+        "* * * FEB,JAN,MAR,APR,MAY,JUN,JUL,AUG,SEP,OCT,NOV,DEC *", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* * * 1-12 *", CRON_CALC_OPT_DEFAULT,
+        "* * * JAN-DEC *", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* * * 2-10/3 *", CRON_CALC_OPT_DEFAULT,
+        "* * * FEB,MAY,AUG *", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* * * 2 *", CRON_CALC_OPT_DEFAULT,
+        "* * * Feb *", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* * * 2 *", CRON_CALC_OPT_DEFAULT,
+        "* * * fEB *", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "1,3,5 * * * *", CRON_CALC_OPT_DEFAULT,
+        "1-6/2 * * * *", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "50,53,56,59 * * * *", CRON_CALC_OPT_DEFAULT,
+        "50-59/3 * * * *", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* 4,8,12,16,20 * * *", CRON_CALC_OPT_DEFAULT,
+        "* 4-23/4 * * *", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* * * * 0-6", CRON_CALC_OPT_DEFAULT,
+        "* * * * TUE,WED,THU,FRI,SAT,SUN,MON", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* * * * 0-6", CRON_CALC_OPT_DEFAULT,
+        "* * * * SUN-SAT", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* * * * 1-6", CRON_CALC_OPT_DEFAULT,
+        "* * * * MON-SAT", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* * * * 0", CRON_CALC_OPT_DEFAULT,
+        "* * * * SUN", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* * * * 0", CRON_CALC_OPT_DEFAULT,
+        "* * * * 7", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* * * * 0-7", CRON_CALC_OPT_DEFAULT,
+        "* * * * 0-6", CRON_CALC_OPT_DEFAULT);
+    CHECK_SAME(
+        "* * * * 1-7", CRON_CALC_OPT_DEFAULT,
+        "* * * * 0-6", CRON_CALC_OPT_DEFAULT);
 
-    check_next("* 1-4 * * * * */15", "2012-07-01_09:53:50", "2012-07-02_01:00:00");
-    check_next("* 1-4 * * * * */15", "2012-07-01_09:53:00", "2012-07-02_01:00:00");
-    check_next("0 */2 1-4 * * *", "2012-07-01_09:00:00", "2012-07-02_01:00:00");
-    check_next("0 */2 * * * *", "2012-07-01_09:00:00", "2012-07-01_09:02:00");
-    check_next("0 */2 * * * *", "2013-07-01_09:00:00", "2013-07-01_09:02:00");
-    check_next("0 */2 * * * *", "2018-09-14_14:24:00", "2018-09-14_14:26:00");
-    check_next("0 */2 * * * *", "2018-09-14_14:25:00", "2018-09-14_14:26:00");
-    check_next("0 */20 * * * *", "2018-09-14_14:24:00", "2018-09-14_14:40:00");
-    check_next("* * * * * *", "2012-07-01_09:00:00", "2012-07-01_09:00:01");
-    check_next("* * * * * *", "2012-12-01_09:00:58", "2012-12-01_09:00:59");
-    check_next("10 * * * * *", "2012-12-01_09:42:09", "2012-12-01_09:42:10");
-    check_next("11 * * * * *", "2012-12-01_09:42:10", "2012-12-01_09:42:11");
-    check_next("10 * * * * *", "2012-12-01_09:42:10", "2012-12-01_09:43:10");
-    check_next("10-15 * * * * *", "2012-12-01_09:42:09", "2012-12-01_09:42:10");
-    check_next("10-15 * * * * *", "2012-12-01_21:42:14", "2012-12-01_21:42:15");
-    check_next("0 * * * * *", "2012-12-01_21:10:42", "2012-12-01_21:11:00");
-    check_next("0 * * * * *", "2012-12-01_21:11:00", "2012-12-01_21:12:00");
-    check_next("0 11 * * * *", "2012-12-01_21:10:42", "2012-12-01_21:11:00");
-    check_next("0 10 * * * *", "2012-12-01_21:11:00", "2012-12-01_22:10:00");
-    check_next("0 0 * * * *", "2012-09-30_11:01:00", "2012-09-30_12:00:00");
-    check_next("0 0 * * * *", "2012-09-30_12:00:00", "2012-09-30_13:00:00");
-    check_next("0 0 * * * *", "2012-09-10_23:01:00", "2012-09-11_00:00:00");
-    check_next("0 0 * * * *", "2012-09-11_00:00:00", "2012-09-11_01:00:00");
-    check_next("0 0 0 * * *", "2012-09-01_14:42:43", "2012-09-02_00:00:00");
-    check_next("0 0 0 * * *", "2012-09-02_00:00:00", "2012-09-03_00:00:00");
-    check_next("* * * 10 * *", "2012-10-09_15:12:42", "2012-10-10_00:00:00");
-    check_next("* * * 10 * *", "2012-10-11_15:12:42", "2012-11-10_00:00:00");
-    check_next("0 0 0 * * *", "2012-09-30_15:12:42", "2012-10-01_00:00:00");
-    check_next("0 0 0 * * *", "2012-10-01_00:00:00", "2012-10-02_00:00:00");
-    check_next("0 0 0 * * *", "2012-08-30_15:12:42", "2012-08-31_00:00:00");
-    check_next("0 0 0 * * *", "2012-08-31_00:00:00", "2012-09-01_00:00:00");
-    check_next("0 0 0 * * *", "2012-10-30_15:12:42", "2012-10-31_00:00:00");
-    check_next("0 0 0 * * *", "2012-10-31_00:00:00", "2012-11-01_00:00:00");
-    check_next("0 0 0 1 * *", "2012-10-30_15:12:42", "2012-11-01_00:00:00");
-    check_next("0 0 0 1 * *", "2012-11-01_00:00:00", "2012-12-01_00:00:00");
-    check_next("0 0 0 1 * *", "2010-12-31_15:12:42", "2011-01-01_00:00:00");
-    check_next("0 0 0 1 * *", "2011-01-01_00:00:00", "2011-02-01_00:00:00");
-    check_next("0 0 0 31 * *", "2011-10-30_15:12:42", "2011-10-31_00:00:00");
-    check_next("0 0 0 1 * *", "2011-10-30_15:12:42", "2011-11-01_00:00:00");
-    check_next("* * * * * 2", "2010-10-25_15:12:42", "2010-10-26_00:00:00");
-    check_next("* * * * * 2", "2010-10-20_15:12:42", "2010-10-26_00:00:00");
-    check_next("* * * * * 2", "2010-10-27_15:12:42", "2010-11-02_00:00:00");
-    check_next("55 5 * * * *", "2010-10-27_15:04:54", "2010-10-27_15:05:55");
-    check_next("55 5 * * * *", "2010-10-27_15:05:55", "2010-10-27_16:05:55");
-    check_next("55 * 10 * * *", "2010-10-27_09:04:54", "2010-10-27_10:00:55");
-    check_next("55 * 10 * * *", "2010-10-27_10:00:55", "2010-10-27_10:01:55");
-    check_next("* 5 10 * * *", "2010-10-27_09:04:55", "2010-10-27_10:05:00");
-    check_next("* 5 10 * * *", "2010-10-27_10:05:00", "2010-10-27_10:05:01");
-    check_next("55 * * 3 * *", "2010-10-02_10:05:54", "2010-10-03_00:00:55");
-    check_next("55 * * 3 * *", "2010-10-03_00:00:55", "2010-10-03_00:01:55");
-    check_next("* * * 3 11 *", "2010-10-02_14:42:55", "2010-11-03_00:00:00");
-    check_next("* * * 3 11 *", "2010-11-03_00:00:00", "2010-11-03_00:00:01");
-    check_next("0 0 0 29 2 *", "2007-02-10_14:42:55", "2008-02-29_00:00:00");
-    check_next("0 0 0 29 2 *", "2008-02-29_00:00:00", "2012-02-29_00:00:00");
-    check_next("0 0 7 ? * MON-FRI", "2009-09-26_00:42:55", "2009-09-28_07:00:00");
-    check_next("0 0 7 ? * MON-FRI", "2009-09-28_07:00:00", "2009-09-29_07:00:00");
-    check_next("0 30 23 30 1/3 ?", "2010-12-30_00:00:00", "2011-01-30_23:30:00");
-    check_next("0 30 23 30 1/3 ?", "2011-01-30_23:30:00", "2011-04-30_23:30:00");
-    check_next("0 30 23 30 1/3 ?", "2011-04-30_23:30:00", "2011-07-30_23:30:00");
-
-    check_same("* * 2 * *", "* * 2 * ?");
-    check_same("57,59 * * * * *", "57/2 * * * * *");
-    check_same("1,3,5 * * * * *", "1-6/2 * * * * *");
-    check_same("* 4,8,12,16,20 * * *", "* 4/4 * * *");
-    check_same("* * * * 0-6", "* * * * TUE,WED,THU,FRI,SAT,SUN,MON");
-    check_same("* * * * 0-6", "* * * * MON-SAT");
-    check_same("* * * * 0", "* * * * SUN");
-    check_same("* * * * 0", "* * * * 7");
-    check_same("* * * 1-12 *", "* * * FEB,JAN,MAR,APR,MAY,JUN,JUL,AUG,SEP,OCT,NOV,DEC *");
-    check_same("* * * 1-12 *", "* * * JAN-DEC *");
-    check_same("* * * 2 *", "* * * Feb *");
-    check_same("*  *  * *  1 *", "* * * * 1 *");
-#endif
     printf("Failures: %d\n", gNumErrors);
     return gNumErrors;
 }

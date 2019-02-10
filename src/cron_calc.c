@@ -70,7 +70,7 @@ static const cron_calc_field_def K_CRON_CALC_FIELD_DEFS[CRON_CALC_FIELD_LAST + 1
     { 0, 23 },                                                  /* CRON_CALC_FIELD_HOURS */
     { 1, 31 },                                                  /* CRON_CALC_FIELD_DAYS */
     { 1, 12,    CRON_CALC_MONTHS,   CRON_CALC_MONTHS_NUM },     /* CRON_CALC_FIELD_MONTHS */
-    { 0,  6,    CRON_CALC_DAYS,     CRON_CALC_DAYS_NUM },       /* CRON_CALC_FIELD_WDAYS */
+    { 0,  7,    CRON_CALC_DAYS,     CRON_CALC_DAYS_NUM },       /* CRON_CALC_FIELD_WDAYS */
     { CRON_CALC_YEAR_START, CRON_CALC_YEAR_END },               /* CRON_CALC_FIELD_YEARS */
 };
 
@@ -88,17 +88,18 @@ typedef enum cron_calc_tm_level {
 typedef struct cron_calc_tm_field_def
 {
     size_t tm_offset;
-    cron_calc_field cron_field;
+    uint32_t min;
+    uint32_t max;
 } cron_calc_tm_field_def;
 
 static const cron_calc_tm_field_def K_CRON_CALC_TM_FIELDS[CRON_CALC_FIELD_LAST + 1] = {
-    { offsetof(struct tm, tm_year), CRON_CALC_FIELD_YEARS },
-    { offsetof(struct tm, tm_mon),  CRON_CALC_FIELD_MONTHS },
-    { offsetof(struct tm, tm_mday), CRON_CALC_FIELD_DAYS },
-    { offsetof(struct tm, tm_hour), CRON_CALC_FIELD_HOURS },
-    { offsetof(struct tm, tm_min),  CRON_CALC_FIELD_MINUTES },
-    { offsetof(struct tm, tm_sec),  CRON_CALC_FIELD_SECONDS },
-    { offsetof(struct tm, tm_wday), CRON_CALC_FIELD_WDAYS }
+    { offsetof(struct tm, tm_year), CRON_CALC_YEAR_START, CRON_CALC_YEAR_END },
+    { offsetof(struct tm, tm_mon),  1, 12 },
+    { offsetof(struct tm, tm_mday), 0, 31 }, /* max is handled differently */
+    { offsetof(struct tm, tm_hour), 0, 23 },
+    { offsetof(struct tm, tm_min),  0, 59 },
+    { offsetof(struct tm, tm_sec),  0, 59 },
+    { offsetof(struct tm, tm_wday), 0,  6 } /* differs from parser range */
 };
 
 /* ---------------------------------------------------------------------------- */
@@ -110,11 +111,9 @@ static const cron_calc_tm_field_def K_CRON_CALC_TM_FIELDS[CRON_CALC_FIELD_LAST +
 #define CRON_CALC_FIELD_MIN(field_) (K_CRON_CALC_FIELD_DEFS[field_].min)
 #define CRON_CALC_FIELD_MAX(field_) (K_CRON_CALC_FIELD_DEFS[field_].max)
 
-#define CRON_CALC_TM_CRON_FIELD(tm_field_) (K_CRON_CALC_TM_FIELDS[(tm_field_)].cron_field)
-#define CRON_CALC_TM_CRON_FIELD_DEF(tm_field_) (&(K_CRON_CALC_FIELD_DEFS[CRON_CALC_TM_CRON_FIELD(tm_field_)]))
 #define CRON_CALC_TM_FIELD(tm_val_, tm_field_) (int*)((uint8_t*)(tm_val_) + K_CRON_CALC_TM_FIELDS[(int)(tm_field_)].tm_offset)
-#define CRON_CALC_TM_FIELD_MIN(tm_field_) (CRON_CALC_TM_CRON_FIELD_DEF(tm_field_)->min)
-#define CRON_CALC_TM_FIELD_MAX(tm_field_) (CRON_CALC_TM_CRON_FIELD_DEF(tm_field_)->max)
+#define CRON_CALC_TM_FIELD_MIN(tm_field_) (K_CRON_CALC_TM_FIELDS[tm_field_].min)
+#define CRON_CALC_TM_FIELD_MAX(tm_field_) (K_CRON_CALC_TM_FIELDS[tm_field_].max)
 
 #define CRON_CALC_MATCHES_MASK(val_, mask_) ((mask_) & ((uint64_t)1 << (val_)))
 
@@ -203,6 +202,11 @@ static cron_calc_error cron_calc_set_field(
             self->months |= value;
             break;
         case CRON_CALC_FIELD_WDAYS:
+            if (value & CRON_CALC_MASK(7)) /* SUN=7 is allowed, but it's the same as SUN=0 */
+            {
+                value |= CRON_CALC_MASK(0);
+                value &= ~CRON_CALC_MASK(7);
+            }
             self->weekDays |= value;
             self->options |= is_star ? CRON_CALC_OPT_WDAY_STARRED : 0;
             break;
@@ -370,6 +374,11 @@ cron_calc_error cron_calc_parse(
     cron_calc_field field = CRON_CALC_FIELD_SECONDS;
     cron_calc_field last_field = CRON_CALC_FIELD_YEARS;
 
+    if (err_location)
+    {
+        *err_location = NULL;
+    }
+
     if (!self || !expr)
     {
         return CRON_CALC_ERROR_ARGUMENT;
@@ -391,11 +400,6 @@ cron_calc_error cron_calc_parse(
     {
         /* any year will match, even outside of range */
         last_field = CRON_CALC_FIELD_WDAYS;
-    }
-
-    if (err_location)
-    {
-        *err_location = NULL;
     }
 
     while (field <= last_field)
