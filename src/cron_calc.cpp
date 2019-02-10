@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Sergey Burnevsky (sergey.burnevsky @ gmail.com)
+// Copyright (c) 2018-2019 Sergey Burnevsky (sergey.burnevsky @ gmail.com)
 //
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
@@ -32,4 +32,11 @@ cron_calc_error CronCalc::parse(const char* expr, cron_calc_option_mask options,
 time_t CronCalc::next(time_t after) const
 {
     return cron_calc_next(&mSelf, after);
+}
+
+// ----------------------------------------------------------------------------
+
+const cron_calc* CronCalc::c_obj() const
+{
+    return &mSelf;
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2018 Sergey Burnevsky (sergey.burnevsky @ gmail.com)
+ * Copyright (c) 2018-2019 Sergey Burnevsky (sergey.burnevsky @ gmail.com)
  *
  * This software is released under the MIT License.
  * https://opensource.org/licenses/MIT
@@ -144,7 +144,7 @@ bool check_next(
     CHECK_TRUE(NULL == err_location);
     if (NULL != err_location)
     {
-        printf("ERROR at char %zu: '%s'\n", err_location - expr, err_location);
+        printf("ERROR at char %u: '%s'\n", (uint32_t) (err_location - expr), err_location);
     }
 
     if (err != CRON_CALC_OK)
@@ -191,12 +191,12 @@ bool check_same(
 {
     int numErrors = gNumErrors;
 
-    cron_calc cc1 = { 0 }, cc2 = { 0 };
+    CronCalc cron1, cron2;
     const char* err_location = NULL;
     cron_calc_error err = CRON_CALC_OK;
     bool same = false;
 
-    err = cron_calc_parse(&cc1, expr1, options1, &err_location);
+    err = cron1.parse(expr1, options1, &err_location);
     CHECK_EQ_INT(CRON_CALC_OK, err);
     CHECK_TRUE(NULL == err_location);
     if (NULL != err_location)
@@ -204,7 +204,7 @@ bool check_same(
         printf("ERROR1 at char %u: '%s'\n", (uint32_t)(err_location - expr1), err_location);
     }
 
-    err = cron_calc_parse(&cc2, expr2, options2, &err_location);
+    err = cron2.parse(expr2, options2, &err_location);
     CHECK_EQ_INT(CRON_CALC_OK, err);
     CHECK_TRUE(NULL == err_location);
     if (NULL != err_location)
@@ -212,9 +212,11 @@ bool check_same(
         printf("ERROR2 at char %u: '%s'\n", (uint32_t)(err_location - expr2), err_location);
     }
 
-    CHECK_TRUE(same = cron_calc_is_same(&cc1, &cc2));
+    CHECK_TRUE(same = (cron1 == cron2));
     if (!same)
     {
+        const cron_calc& cc1 = *(cron1.c_obj());
+        const cron_calc& cc2 = *(cron2.c_obj());
         CHECK_EQ_INT(cc1.seconds, cc2.seconds);
         CHECK_EQ_INT(cc1.minutes, cc2.minutes);
         CHECK_EQ_INT(cc1.hours, cc2.hours);
@@ -476,6 +478,13 @@ int main()
         "2004-02-29_00:00:00,"
         "2008-02-29_00:00:00,"
         "2012-02-29_00:00:00");
+
+    /* 29-Feb with restricted year range */
+    CHECK_NEXT("0 0 29 FEB * 2015-2021", CRON_CALC_OPT_WITH_YEARS,
+        "1999-01-01_00:00:00",
+        "2016-02-29_00:00:00,"
+        "2020-02-29_00:00:00,"
+        "-");
 
     /* Every 15 minutes */
     CHECK_NEXT("*/15 * * * *", CRON_CALC_OPT_DEFAULT,

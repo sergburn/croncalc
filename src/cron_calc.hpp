@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Sergey Burnevsky (sergey.burnevsky @ gmail.com)
+// Copyright (c) 2018-2019 Sergey Burnevsky (sergey.burnevsky @ gmail.com)
 //
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
@@ -30,7 +30,18 @@ public:
      */
     time_t next(time_t after) const;
 
+    /**
+     * Wrapper for cron_calc_is_same().
+     * @see cron_calc_is_same().
+     */
     friend bool operator==(const CronCalc& cron1, const CronCalc& cron2);
+
+    /**
+     * Const reference to underlying C API object.
+     * Useful for testing only. If modified, behaviour is undefined.
+     * @return Underlying cron_calc object.
+     */
+    const cron_calc* c_obj() const;
 
 private:
     cron_calc mSelf;

@@ -13,8 +13,10 @@ find . -iname "*.gc??" | xargs rm -f
 cd .cmake
 ./cron_calc_test
 
-find . -iname "*.o" > obj_files
-find . -iname "*.obj" >> obj_files
+find . -iname "*.o" -path "*/src/*" > obj_files
+# MinGW variant
+find . -iname "*.obj" -path "*/src/*" >> obj_files
+
 cat obj_files
 cat obj_files | xargs gcov -b -c
 
