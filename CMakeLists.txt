@@ -16,6 +16,10 @@ endif()
 add_library(cron_calc_c STATIC src/cron_calc.c)
 target_compile_options(cron_calc_c PRIVATE -std=c99 -Wall -Werror -pedantic ${CRON_CALC_COVERAGE})
 
+if (UNIX)
+    target_compile_definitions(cron_calc_c PUBLIC _POSIX_C_SOURCE=200809L)
+endif()
+
 add_library(cron_calc_cpp STATIC src/cron_calc.cpp)
 target_compile_options(cron_calc_cpp PRIVATE -std=c++98 -Wall -Werror -pedantic ${CRON_CALC_COVERAGE})
 

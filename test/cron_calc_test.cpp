@@ -146,7 +146,7 @@ bool check_next(
 
     print_test("valid", expr, options);
 
-    cron.parse(expr, options, &err_location);
+    err = cron.parse(expr, options, &err_location);
     CHECK_EQ_INT(CRON_CALC_OK, err);
     CHECK_TRUE(NULL == err_location);
     if (NULL != err_location)
@@ -248,11 +248,29 @@ bool check_same(
 int main()
 {
     /* bad invocation */
-    cron_calc cc, cc2;
+    cron_calc cc = { 1 };
     const char* err_location = NULL;
     CHECK_EQ_INT(cron_calc_parse(NULL, "* * * * *", CRON_CALC_OPT_DEFAULT, &err_location), CRON_CALC_ERROR_ARGUMENT);
     CHECK_EQ_INT(cron_calc_parse(&cc, NULL, CRON_CALC_OPT_DEFAULT, &err_location), CRON_CALC_ERROR_ARGUMENT);
     CHECK_EQ_INT(cron_calc_next(NULL, 1549747649), CRON_CALC_INVALID_TIME);
+
+    cc.years = 0;
+    CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
+    cc.months = 0; cc.years = 1;
+    CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
+    cc.days = 0; cc.months = 1;
+    CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
+    cc.weekDays = 0; cc.days = 1;
+    CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
+    cc.hours = 0; cc.weekDays = 1;
+    CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
+    cc.minutes = 0; cc.hours = 1;
+    CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
+    cc.seconds = 0; cc.minutes = 1;
+    CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
+    cc.options = 0; cc.minutes = 1;
+    CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
+    cc.options = 1;
     CHECK_EQ_INT(cron_calc_next(&cc, -2), CRON_CALC_INVALID_TIME);
 
     /* bad format */

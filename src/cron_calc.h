@@ -18,13 +18,13 @@ extern "C" {
 
 typedef enum cron_calc_option
 {
-    CRON_CALC_OPT_DEFAULT       = 0x0,  /*!< Default options, only 5 standard required fields expected */
-    CRON_CALC_OPT_WITH_SECONDS  = 0x1,  /*!< If set, first field is treated as seconds */
-    CRON_CALC_OPT_WITH_YEARS    = 0x2,  /*!< If set, one more field for years is supported */
+    CRON_CALC_OPT_INVALID       = 0x0,
+    CRON_CALC_OPT_DEFAULT       = 0x1,  /*!< Default options, only 5 standard required fields expected */
+    CRON_CALC_OPT_WITH_SECONDS  = 0x2,  /*!< If set, first field is treated as seconds */
+    CRON_CALC_OPT_WITH_YEARS    = 0x4,  /*!< If set, one more field for years is supported */
 
     CRON_CALC_OPT_FULL = CRON_CALC_OPT_WITH_SECONDS | CRON_CALC_OPT_WITH_YEARS,
 
-    CRON_CALC_OPT_RESERVED_04   = 0x04,
     CRON_CALC_OPT_RESERVED_08   = 0x08,
     CRON_CALC_OPT_RESERVED_10   = 0x10,
     CRON_CALC_OPT_RESERVED_20   = 0x20,

@@ -384,6 +384,7 @@ cron_calc_error cron_calc_parse(
         return CRON_CALC_ERROR_ARGUMENT;
     }
 
+    memset(self, 0, sizeof *self);
     self->options = options;
 
     if (!(options & CRON_CALC_OPT_WITH_SECONDS))
@@ -624,7 +625,8 @@ static bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_c
 
 time_t cron_calc_next(const cron_calc* self, time_t after)
 {
-    struct tm* tm_after;
+    struct tm tm_buf = { 0 };
+    struct tm* tm_after = NULL;
     time_t start = after + 1;
 
     if (!self)
@@ -632,15 +634,34 @@ time_t cron_calc_next(const cron_calc* self, time_t after)
         return CRON_CALC_INVALID_TIME;
     }
 
+    /* try to check that this object was initialized correctly before this call.
+     * All fields ()except years) must be non-0, although this is not a 100%-proof method. */
+    if (!self->options ||
+        !self->months || !self->days || !self->weekDays ||
+        !self->hours || !self->minutes || !self->seconds)
+    {
+        return CRON_CALC_INVALID_TIME;
+    }
+
+#if defined(_POSIX_C_SOURCE)
+    tm_after = localtime_r(&start, &tm_buf);
+#elif defined (_MSC_VER)
+    tm_after = localtime_s(&start, &tm_buf);
+#else
     tm_after = localtime(&start);
+    if (tm_after)
+    {
+        tm_buf = *tm_after;
+    }
+#endif
     if (!tm_after)
     {
         return CRON_CALC_INVALID_TIME;
     }
 
     /* adjust tm values */
-    tm_after->tm_year += 1900;
-    tm_after->tm_mon += 1;
+    tm_buf.tm_year += 1900;
+    tm_buf.tm_mon += 1;
 
     if (!cron_calc_find_next_year(self, tm_after))
     {
@@ -648,9 +669,9 @@ time_t cron_calc_next(const cron_calc* self, time_t after)
     }
 
     /* restore to tm definitions */
-    tm_after->tm_year -= 1900;
-    tm_after->tm_mon -= 1;
-    tm_after->tm_isdst = -1;
+    tm_buf.tm_year -= 1900;
+    tm_buf.tm_mon -= 1;
+    tm_buf.tm_isdst = -1;
 
     return mktime(tm_after); /* CRON_CALC_INVALID_TIME in case of error */
 }
