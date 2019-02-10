@@ -8,7 +8,7 @@ set -ev
 
 find . -iname "*.gc??" | xargs rm -f
 
-./build.sh clean -DCRON_CALC_WITH_COVERAGE=1 $@
+./build.sh clean -DCRON_CALC_WITH_COVERAGE=1 -DCRON_CALC_TEST_VERBOSE=1 $@
 
 cd .cmake
 ./cron_calc_test

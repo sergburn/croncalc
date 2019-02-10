@@ -21,6 +21,9 @@ target_compile_options(cron_calc_cpp PRIVATE -std=c++98 -Wall -Werror -pedantic 
 
 add_executable(cron_calc_test test/cron_calc_test.cpp)
 target_compile_options(cron_calc_test PRIVATE -std=c++11 ${CRON_CALC_COVERAGE})
+if(${CRON_CALC_TEST_VERBOSE})
+    target_compile_definitions(cron_calc_test PRIVATE CRON_CALC_TEST_VERBOSE)
+endif()
 
 target_link_libraries(cron_calc_test PRIVATE cron_calc_cpp cron_calc_c ${CRON_CALC_COVERAGE})
 

@@ -70,17 +70,19 @@ time_t parseTimeString(const char* tm_str)
 
 /* ---------------------------------------------------------------------------- */
 
-#if 0
-void check_same(const char* expr1, const char* expr2)
+void print_test(const char* kind, const char* expr, cron_calc_option_mask options)
 {
-    CronCalc cron1, cron2;
-
-    CHECK_TRUE(CRON_CALC_OK == cron1.parse(expr1, NULL));
-    CHECK_TRUE(CRON_CALC_OK == cron2.parse(expr2, NULL));
-
-    CHECK_TRUE(cron1 == cron2);
-}
+#if CRON_CALC_TEST_VERBOSE
+    printf("Testing %s expression '%s' (%s) ...\n",
+        kind, expr,
+        CRON_CALC_OPT_WITH_YEARS ? "years" :
+        CRON_CALC_OPT_WITH_SECONDS ? "seconds" :
+        CRON_CALC_OPT_FULL ? "full" : "default");
+#else
+    (void) expr;
+    (void) options;
 #endif
+}
 
 /* ---------------------------------------------------------------------------- */
 
@@ -120,6 +122,7 @@ void check_invalid(
 {
     CronCalc cron;
     const char* err_location = NULL;
+    print_test("invalid", expr, options);
     CHECK_EQ_INT_LN(err, cron.parse(expr, options, &err_location), lineno);
     CHECK_EQ_INT_LN(err_offset, err_location - expr, lineno);
 }
@@ -139,7 +142,11 @@ bool check_next(
 
     CronCalc cron;
     const char* err_location = NULL;
-    cron_calc_error err = cron.parse(expr, options, &err_location);
+    cron_calc_error err = CRON_CALC_OK;
+
+    print_test("valid", expr, options);
+
+    cron.parse(expr, options, &err_location);
     CHECK_EQ_INT(CRON_CALC_OK, err);
     CHECK_TRUE(NULL == err_location);
     if (NULL != err_location)
@@ -195,6 +202,9 @@ bool check_same(
     const char* err_location = NULL;
     cron_calc_error err = CRON_CALC_OK;
     bool same = false;
+
+    print_test("1st", expr1, options1);
+    print_test("2nd", expr2, options2);
 
     err = cron1.parse(expr1, options1, &err_location);
     CHECK_EQ_INT(CRON_CALC_OK, err);
