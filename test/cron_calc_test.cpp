@@ -199,6 +199,8 @@ bool check_same(
     int numErrors = gNumErrors;
 
     CronCalc cron1, cron2;
+    const cron_calc& cc1 = *(cron1.c_obj());
+    const cron_calc& cc2 = *(cron2.c_obj());
     const char* err_location = NULL;
     cron_calc_error err = CRON_CALC_OK;
     bool same = false;
@@ -225,8 +227,6 @@ bool check_same(
     CHECK_TRUE(same = (cron1 == cron2));
     if (!same)
     {
-        const cron_calc& cc1 = *(cron1.c_obj());
-        const cron_calc& cc2 = *(cron2.c_obj());
         CHECK_EQ_INT(cc1.seconds, cc2.seconds);
         CHECK_EQ_INT(cc1.minutes, cc2.minutes);
         CHECK_EQ_INT(cc1.hours, cc2.hours);
