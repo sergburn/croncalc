@@ -248,29 +248,45 @@ bool check_same(
 int main()
 {
     /* bad invocation */
-    cron_calc cc = { 1 };
+    cron_calc cc = { 0 }, cc2 = { 0 };
     const char* err_location = NULL;
     CHECK_EQ_INT(cron_calc_parse(NULL, "* * * * *", CRON_CALC_OPT_DEFAULT, &err_location), CRON_CALC_ERROR_ARGUMENT);
     CHECK_EQ_INT(cron_calc_parse(&cc, NULL, CRON_CALC_OPT_DEFAULT, &err_location), CRON_CALC_ERROR_ARGUMENT);
     CHECK_EQ_INT(cron_calc_next(NULL, 1549747649), CRON_CALC_INVALID_TIME);
 
-    cc.years = 0;
+    cc = (cron_calc) { 1, 1, 1, 1, 1, 1, 1, 1 };
+    cc2 = cc;
+    cc.seconds = 0;
     CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
-    cc.months = 0; cc.years = 1;
+    CHECK_TRUE(!cron_calc_is_same(&cc, &cc2));
+    cc.minutes = 0; cc.seconds = 1;
     CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
-    cc.days = 0; cc.months = 1;
+    CHECK_TRUE(!cron_calc_is_same(&cc, &cc2));
+    cc.hours = 0; cc.minutes = 1;
     CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
-    cc.weekDays = 0; cc.days = 1;
+    CHECK_TRUE(!cron_calc_is_same(&cc, &cc2));
+    cc.weekDays = 0; cc.hours = 1;
     CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
-    cc.hours = 0; cc.weekDays = 1;
+    CHECK_TRUE(!cron_calc_is_same(&cc, &cc2));
+    cc.days = 0; cc.weekDays = 1;
     CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
-    cc.minutes = 0; cc.hours = 1;
+    CHECK_TRUE(!cron_calc_is_same(&cc, &cc2));
+    cc.months = 0; cc.days = 1;
     CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
-    cc.seconds = 0; cc.minutes = 1;
+    CHECK_TRUE(!cron_calc_is_same(&cc, &cc2));
+    cc.years = 0; cc.months = 1; cc.options = CRON_CALC_OPT_WITH_YEARS;
     CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
-    cc.options = 0; cc.minutes = 1;
+    CHECK_TRUE(!cron_calc_is_same(&cc, &cc2));
+    cc.options = 0; cc.years = 1;
     CHECK_EQ_INT(cron_calc_next(&cc, 1549747649), CRON_CALC_INVALID_TIME);
+    CHECK_TRUE(!cron_calc_is_same(&cc, &cc2));
     cc.options = 1;
+    CHECK_TRUE(cron_calc_is_same(&cc, &cc2));
+
+    if (sizeof(time_t) > sizeof(int))
+    {
+        CHECK_EQ_INT(cron_calc_next(&cc, 2L<<56), CRON_CALC_INVALID_TIME);
+    }
     CHECK_EQ_INT(cron_calc_next(&cc, -2), CRON_CALC_INVALID_TIME);
 
     /* bad format */
@@ -354,9 +370,16 @@ int main()
     CHECK_INVALID("* * * * * 2010/2", CRON_CALC_OPT_WITH_YEARS, CRON_CALC_ERROR_FIELD_FORMAT, 14);
 
     /* names */
+    CHECK_INVALID("* * * M", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 6);
     CHECK_INVALID("* * * M *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 6);
     CHECK_INVALID("* * * MA *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 6);
     CHECK_INVALID("* * * MAN *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 6);
+    CHECK_INVALID("* * * @AN *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_EXPECTED, 6);
+    CHECK_INVALID("* * * [AN *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_EXPECTED, 6);
+    CHECK_INVALID("* * * {AN *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_NUMBER_EXPECTED, 6);
+    CHECK_INVALID("* * * MA@ *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 6);
+    CHECK_INVALID("* * * MA[ *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 6);
+    CHECK_INVALID("* * * Ma{ *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 6);
     CHECK_INVALID("* * * MAY,B *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
     CHECK_INVALID("* * * MAY,aB *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
     CHECK_INVALID("* * * MAY,ApP *", CRON_CALC_OPT_DEFAULT, CRON_CALC_ERROR_INVALID_NAME, 10);
@@ -498,6 +521,12 @@ int main()
         "2020-01-29_00:00:00,"
         "2020-02-29_00:00:00,"
         "2020-03-29_00:00:00");
+    CHECK_NEXT("1 1 29 3 * *", CRON_CALC_OPT_WITH_YEARS,
+        "2019-01-01_00:00:00",
+        "2019-03-29_01:01:00");
+    CHECK_NEXT("1 1 28 2 * *", CRON_CALC_OPT_WITH_YEARS,
+        "2019-01-01_00:00:00",
+        "2019-02-28_01:01:00");
 
     /* 2000 was also a leap year (div 400) */
     CHECK_NEXT("0 0 29 FEB *", CRON_CALC_OPT_DEFAULT,
@@ -506,6 +535,14 @@ int main()
         "2004-02-29_00:00:00,"
         "2008-02-29_00:00:00,"
         "2012-02-29_00:00:00");
+
+    /* 2100 is not a leap year (div 100) */
+    CHECK_NEXT("0 0 29 FEB *", CRON_CALC_OPT_DEFAULT,
+        "2096-01-01_00:00:00",
+        "2096-02-29_00:00:00,"
+        "2104-02-29_00:00:00,"
+        "2108-02-29_00:00:00,"
+        "2112-02-29_00:00:00");
 
     /* 29-Feb with restricted year range */
     CHECK_NEXT("0 0 29 FEB * 2015-2021", CRON_CALC_OPT_WITH_YEARS,

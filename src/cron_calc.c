@@ -31,7 +31,9 @@ enum
     CRON_CALC_YEAR_START = 2000,
     CRON_CALC_YEAR_COUNT = 64,
     CRON_CALC_YEAR_END = CRON_CALC_YEAR_START + CRON_CALC_YEAR_COUNT - 1,
-    CRON_CALC_YEAR_MAX = (sizeof(time_t) > 4) ? INT32_MAX : 2038,
+    CRON_CALC_YEAR_MAX = (sizeof(time_t) > 4) ? 3000 : 2038,
+    /* years limited at 3000 to avoid too long operation if
+     * cron_calc_next() is called with improperly initialized object */
 
     CRON_CALC_OPT_MDAY_STARRED = CRON_CALC_OPT_RESERVED_40,
     CRON_CALC_OPT_WDAY_STARRED = CRON_CALC_OPT_RESERVED_80,
@@ -517,10 +519,10 @@ static bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_c
 
 static bool cron_calc_find_next_day(const cron_calc* self, struct tm* tm_val, bool rollover)
 {
-    int month_len = cron_calc_month_days(tm_val->tm_year, tm_val->tm_mon);
+    const int month_len = cron_calc_month_days(tm_val->tm_year, tm_val->tm_mon);
     /* crontab(5): If both fields are restricted (i.e., do not contain the "*" character),
      * the command will be run when _either_ field matches the current time. */
-    bool either = !(self->options & (CRON_CALC_OPT_MDAY_STARRED | CRON_CALC_OPT_WDAY_STARRED));
+    const bool either = !(self->options & (CRON_CALC_OPT_MDAY_STARRED | CRON_CALC_OPT_WDAY_STARRED));
 
     if (rollover)
     {
@@ -533,7 +535,7 @@ static bool cron_calc_find_next_day(const cron_calc* self, struct tm* tm_val, bo
         const bool mday_matches = CRON_CALC_MATCHES_MASK(tm_val->tm_mday, self->days);
         const bool wday_matches = CRON_CALC_MATCHES_MASK(tm_val->tm_wday, self->weekDays);
 
-        bool matches = either ? mday_matches || wday_matches : mday_matches && wday_matches;
+        const bool matches = either ? mday_matches || wday_matches : mday_matches && wday_matches;
 
         if (matches && cron_calc_find_next(self, tm_val, CRON_CALC_TM_HOUR, rollover))
         {
@@ -546,32 +548,11 @@ static bool cron_calc_find_next_day(const cron_calc* self, struct tm* tm_val, bo
 
 /* ---------------------------------------------------------------------------- */
 
-static bool cron_calc_find_next_second(const cron_calc* self, struct tm* tm_val, bool rollover)
-{
-    int val_max = CRON_CALC_FIELD_MAX(CRON_CALC_FIELD_SECONDS);
-
-    if (rollover)
-    {
-        tm_val->tm_sec = CRON_CALC_FIELD_MIN(CRON_CALC_FIELD_SECONDS);
-    }
-
-    for (; tm_val->tm_sec <= val_max; tm_val->tm_sec++)
-    {
-        if (CRON_CALC_MATCHES_MASK(tm_val->tm_sec, self->seconds))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-/* ---------------------------------------------------------------------------- */
-
 static bool cron_calc_find_next_year(const cron_calc* self, struct tm* tm_val)
 {
     bool rollover = false;
     const bool any_year = !(self->options & CRON_CALC_OPT_WITH_YEARS);
-    int val_max = any_year ? CRON_CALC_YEAR_MAX : CRON_CALC_YEAR_END;
+    const int val_max = any_year ? CRON_CALC_YEAR_MAX : CRON_CALC_YEAR_END;
 
     for (; tm_val->tm_year <= val_max; tm_val->tm_year++, rollover = true)
     {
@@ -588,16 +569,19 @@ static bool cron_calc_find_next_year(const cron_calc* self, struct tm* tm_val)
 
 static bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_calc_tm_level level, bool rollover)
 {
-    uint64_t mask = cron_calc_get_mask(self, level);
-    int val_min = CRON_CALC_TM_FIELD_MIN(level);
-    int val_max = CRON_CALC_TM_FIELD_MAX(level);
+    const uint64_t mask = cron_calc_get_mask(self, level);
+    const int val_min = CRON_CALC_TM_FIELD_MIN(level);
+    const int val_max = CRON_CALC_TM_FIELD_MAX(level);
 
     int* fld = CRON_CALC_TM_FIELD(tm_val, level);
     int val = rollover ? val_min : *fld;
     bool found = false;
 
     /* if no match on this level, it has to be incremented
-       and therefore all levels downwards have to roll over and start from minimum */
+     * and therefore all levels downwards have to roll over and start from minimum.
+     * if seconds not specified in the expression, its mask is set to 1,
+     * which yeilds match on the first iteration of this loop (only after rollover though)
+     */
     for (; !found && (val <= val_max); val++, rollover = true)
     {
         if (CRON_CALC_MATCHES_MASK(val, mask))
@@ -608,9 +592,9 @@ static bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_c
             {
                 found = cron_calc_find_next_day(self, tm_val, rollover);
             }
-            else if (level == CRON_CALC_TM_MINUTE)
+            else if (level == CRON_CALC_TM_SECOND)
             {
-                found = cron_calc_find_next_second(self, tm_val, rollover);
+                found = true;
             }
             else
             {
@@ -635,10 +619,14 @@ time_t cron_calc_next(const cron_calc* self, time_t after)
     }
 
     /* try to check that this object was initialized correctly before this call.
-     * All fields ()except years) must be non-0, although this is not a 100%-proof method. */
+     * All fields (except years) must be non-0, although this is not a 100%-proof method. */
     if (!self->options ||
         !self->months || !self->days || !self->weekDays ||
         !self->hours || !self->minutes || !self->seconds)
+    {
+        return CRON_CALC_INVALID_TIME;
+    }
+    if ((self->options & CRON_CALC_OPT_WITH_YEARS) && !self->years)
     {
         return CRON_CALC_INVALID_TIME;
     }
@@ -681,11 +669,12 @@ time_t cron_calc_next(const cron_calc* self, time_t after)
 bool cron_calc_is_same(const cron_calc* left, const cron_calc* right)
 {
     return
+        left->seconds == right->seconds &&
         left->minutes == right->minutes &&
         left->hours == right->hours &&
         left->days == right->days &&
-        left->months == right->months &&
         left->weekDays == right->weekDays &&
+        left->months == right->months &&
         left->years == right->years &&
-        left->seconds == right->seconds;
+        left->options == right->options;
 }
