@@ -63,7 +63,6 @@ typedef struct cron_calc_field_def
     uint32_t max;
     const char* const* names;
     uint32_t names_count;
-    uint32_t names_first_index;
 } cron_calc_field_def;
 
 static const cron_calc_field_def K_CRON_CALC_FIELD_DEFS[CRON_CALC_FIELD_LAST + 1] = {
@@ -86,6 +85,15 @@ typedef enum cron_calc_tm_level {
 
     CRON_CALC_TM_WDAY
 } cron_calc_tm_level;
+
+/* this trick with array of masks is only for "fun":
+ * a) avoid get_mask(level) function, which cannot be fully test-covered
+ * b) ok, it also reduces amount of conditions... but who would care...
+ *
+ * Only months, minutes and seconds need to be stored there,
+ * so its length is shorter than one would guess.
+ */
+typedef uint64_t cron_calc_mask_array[CRON_CALC_TM_WDAY];
 
 typedef struct cron_calc_tm_field_def
 {
@@ -170,10 +178,12 @@ static cron_calc_error cron_calc_set_field(
     uint64_t value = 0;
     uint32_t shift = (field == CRON_CALC_FIELD_YEARS) ? CRON_CALC_YEAR_START : 0;
 
+#ifndef CRON_CALC_WITH_COVERAGE /* never happens */
     if (step < 1)
     {
         return CRON_CALC_ERROR_NUMBER_RANGE;
     }
+#endif
     if (max < min)
     {
         return CRON_CALC_ERROR_NUMBER_RANGE;
@@ -283,7 +293,7 @@ static cron_calc_error cron_calc_parse_name(const char** pp, uint32_t* value, co
             (fname[1] == name[1] || fname[1] == name[1] - CRON_CALC_NAME_UPCASE) &&
             (fname[2] == name[2] || fname[2] == name[2] - CRON_CALC_NAME_UPCASE))
         {
-            *value = i + field_def->names_first_index;
+            *value = i;
             *pp = p;
             return CRON_CALC_OK;
         }
@@ -497,27 +507,20 @@ cron_calc_error cron_calc_parse(
 /* ---------------------------------------------------------------------------- */
 /* ---------------------------------------------------------------------------- */
 
-uint64_t cron_calc_get_mask(const cron_calc* self, cron_calc_tm_level level)
-{
-    uint64_t mask =
-        level == CRON_CALC_TM_YEAR ? self->years :
-        level == CRON_CALC_TM_MONTH ? self->months :
-        level == CRON_CALC_TM_DAY ? self->days :
-        level == CRON_CALC_TM_HOUR ? self->hours :
-        level == CRON_CALC_TM_MINUTE ? self->minutes :
-        level == CRON_CALC_TM_SECOND ? self->seconds :
-        level == CRON_CALC_TM_WDAY ? self->weekDays : 0;
-
-    return mask;
-}
+static bool cron_calc_find_next(
+    const cron_calc* self,
+    struct tm* tm_val,
+    const cron_calc_mask_array mask_array,
+    cron_calc_tm_level level,
+    bool rollover);
 
 /* ---------------------------------------------------------------------------- */
 
-static bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_calc_tm_level level, bool rollover);
-
-/* ---------------------------------------------------------------------------- */
-
-static bool cron_calc_find_next_day(const cron_calc* self, struct tm* tm_val, bool rollover)
+static bool cron_calc_find_next_day(
+    const cron_calc* self,
+    struct tm* tm_val,
+    const cron_calc_mask_array masks,
+    bool rollover)
 {
     const int month_len = cron_calc_month_days(tm_val->tm_year, tm_val->tm_mon);
     /* crontab(5): If both fields are restricted (i.e., do not contain the "*" character),
@@ -537,7 +540,7 @@ static bool cron_calc_find_next_day(const cron_calc* self, struct tm* tm_val, bo
 
         const bool matches = either ? mday_matches || wday_matches : mday_matches && wday_matches;
 
-        if (matches && cron_calc_find_next(self, tm_val, CRON_CALC_TM_HOUR, rollover))
+        if (matches && cron_calc_find_next(self, tm_val, masks, CRON_CALC_TM_HOUR, rollover))
         {
             return true;
         }
@@ -548,7 +551,10 @@ static bool cron_calc_find_next_day(const cron_calc* self, struct tm* tm_val, bo
 
 /* ---------------------------------------------------------------------------- */
 
-static bool cron_calc_find_next_year(const cron_calc* self, struct tm* tm_val)
+static bool cron_calc_find_next_year(
+    const cron_calc* self,
+    struct tm* tm_val,
+    const cron_calc_mask_array masks)
 {
     bool rollover = false;
     const bool any_year = !(self->options & CRON_CALC_OPT_WITH_YEARS);
@@ -557,7 +563,7 @@ static bool cron_calc_find_next_year(const cron_calc* self, struct tm* tm_val)
     for (; tm_val->tm_year <= val_max; tm_val->tm_year++, rollover = true)
     {
         if ((any_year || CRON_CALC_MATCHES_MASK(tm_val->tm_year - CRON_CALC_YEAR_START, self->years)) &&
-            cron_calc_find_next(self, tm_val, CRON_CALC_TM_MONTH, rollover))
+            cron_calc_find_next(self, tm_val, masks, CRON_CALC_TM_MONTH, rollover))
         {
             return true;
         }
@@ -567,9 +573,14 @@ static bool cron_calc_find_next_year(const cron_calc* self, struct tm* tm_val)
 
 /* ---------------------------------------------------------------------------- */
 
-static bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_calc_tm_level level, bool rollover)
+static bool cron_calc_find_next(
+    const cron_calc* self,
+    struct tm* tm_val,
+    const cron_calc_mask_array masks,
+    cron_calc_tm_level level,
+    bool rollover)
 {
-    const uint64_t mask = cron_calc_get_mask(self, level);
+    const uint64_t mask = masks[level];
     const int val_min = CRON_CALC_TM_FIELD_MIN(level);
     const int val_max = CRON_CALC_TM_FIELD_MAX(level);
 
@@ -590,7 +601,7 @@ static bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_c
 
             if (level == CRON_CALC_TM_MONTH)
             {
-                found = cron_calc_find_next_day(self, tm_val, rollover);
+                found = cron_calc_find_next_day(self, tm_val, masks, rollover);
             }
             else if (level == CRON_CALC_TM_SECOND)
             {
@@ -598,7 +609,7 @@ static bool cron_calc_find_next(const cron_calc* self, struct tm* tm_val, cron_c
             }
             else
             {
-                found = cron_calc_find_next(self, tm_val, level + 1, rollover);
+                found = cron_calc_find_next(self, tm_val, masks, level + 1, rollover);
             }
         }
     }
@@ -612,6 +623,7 @@ time_t cron_calc_next(const cron_calc* self, time_t after)
     struct tm tm_buf = { 0 };
     struct tm* tm_after = NULL;
     time_t start = after + 1;
+    cron_calc_mask_array masks = { 0 };
 
     if (!self)
     {
@@ -630,6 +642,12 @@ time_t cron_calc_next(const cron_calc* self, time_t after)
     {
         return CRON_CALC_INVALID_TIME;
     }
+
+    masks[CRON_CALC_TM_MONTH] = self->months;
+    masks[CRON_CALC_TM_HOUR] = self->hours;
+    masks[CRON_CALC_TM_MINUTE] = self->minutes;
+    masks[CRON_CALC_TM_SECOND] = self->seconds;
+    /* other masks are taken from self */
 
 #if defined(_POSIX_C_SOURCE)
     tm_after = localtime_r(&start, &tm_buf);
@@ -651,7 +669,7 @@ time_t cron_calc_next(const cron_calc* self, time_t after)
     tm_buf.tm_year += 1900;
     tm_buf.tm_mon += 1;
 
-    if (!cron_calc_find_next_year(self, tm_after))
+    if (!cron_calc_find_next_year(self, tm_after, masks))
     {
         return CRON_CALC_INVALID_TIME;
     }
