@@ -37,6 +37,8 @@ enum
 
     CRON_CALC_OPT_MDAY_STARRED = CRON_CALC_OPT_RESERVED_40,
     CRON_CALC_OPT_WDAY_STARRED = CRON_CALC_OPT_RESERVED_80,
+
+    CRON_CALC_LAST_CODE = INT32_MAX,
 };
 
 static const char* const CRON_CALC_DAYS[] = {
@@ -105,7 +107,7 @@ typedef struct cron_calc_tm_field_def
 static const cron_calc_tm_field_def K_CRON_CALC_TM_FIELDS[CRON_CALC_FIELD_LAST + 1] = {
     { offsetof(struct tm, tm_year), CRON_CALC_YEAR_START, CRON_CALC_YEAR_END },
     { offsetof(struct tm, tm_mon),  1, 12 },
-    { offsetof(struct tm, tm_mday), 0, 31 }, /* max is handled differently */
+    { offsetof(struct tm, tm_mday), 1, 31 }, /* max is handled differently */
     { offsetof(struct tm, tm_hour), 0, 23 },
     { offsetof(struct tm, tm_min),  0, 59 },
     { offsetof(struct tm, tm_sec),  0, 59 },
@@ -189,9 +191,12 @@ static cron_calc_error cron_calc_set_field(
         return CRON_CALC_ERROR_NUMBER_RANGE;
     }
 
-    for (i = min; i <= max; i += step)
+    if (max != CRON_CALC_LAST_CODE)
     {
-        value |= CRON_CALC_MASK(i - shift);
+        for (i = min; i <= max; i += step)
+        {
+            value |= CRON_CALC_MASK(i - shift);
+        }
     }
 
     /* ranges checked at parsing */
@@ -207,6 +212,10 @@ static cron_calc_error cron_calc_set_field(
             self->hours |= value;
             break;
         case CRON_CALC_FIELD_DAYS:
+            if (max == CRON_CALC_LAST_CODE)
+            {
+                value = CRON_CALC_MASK(0);
+            }
             self->days |= value;
             self->options |= is_star ? CRON_CALC_OPT_MDAY_STARRED : 0;
             break;
@@ -427,6 +436,19 @@ cron_calc_error cron_calc_parse(
             is_range = is_star = true;
             p++;
         }
+        else if (*p == 'L')
+        {
+            if (field == CRON_CALC_FIELD_DAYS)
+            {
+                min = max = CRON_CALC_LAST_CODE;
+                p++;
+            }
+            else
+            {
+                err = CRON_CALC_ERROR_NUMBER_EXPECTED;
+                break;
+            }
+        }
         else
         {
             err = cron_calc_parse_value(&p, &min, field);
@@ -526,6 +548,13 @@ static bool cron_calc_find_next_day(
     /* crontab(5): If both fields are restricted (i.e., do not contain the "*" character),
      * the command will be run when _either_ field matches the current time. */
     const bool either = !(self->options & (CRON_CALC_OPT_MDAY_STARRED | CRON_CALC_OPT_WDAY_STARRED));
+    const uint64_t week_days = self->weekDays;
+    uint64_t days = self->days;
+    /* Bit 0 is set if last day of month should match also */
+    if (CRON_CALC_MATCHES_MASK(0, days))
+    {
+        days |= CRON_CALC_MASK(month_len);
+    }
 
     if (rollover)
     {
@@ -535,8 +564,8 @@ static bool cron_calc_find_next_day(
 
     for (; tm_val->tm_mday <= month_len; tm_val->tm_mday++, rollover = true)
     {
-        const bool mday_matches = CRON_CALC_MATCHES_MASK(tm_val->tm_mday, self->days);
-        const bool wday_matches = CRON_CALC_MATCHES_MASK(tm_val->tm_wday, self->weekDays);
+        const bool mday_matches = CRON_CALC_MATCHES_MASK(tm_val->tm_mday, days);
+        const bool wday_matches = CRON_CALC_MATCHES_MASK(tm_val->tm_wday, week_days);
 
         const bool matches = either ? mday_matches || wday_matches : mday_matches && wday_matches;
 

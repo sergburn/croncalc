@@ -63,25 +63,27 @@ typedef enum cron_calc_error
 
 /**
  * Supported format:
- *  [SP <seconds> ] <minutes> SP <hours> SP <days> SP <months> SP <week days> [ SP <years> ]
+ *  [<seconds> SP] <minutes> SP <hours> SP <days> SP <months> SP <week days> [SP <years>]
  *
  * Each field is in format:
  *  *[/<step>] | <num>[-<num>[/<step>]][,...]
  *
  * Allowed nums are:
+ *  <seconds>   : 0-59          CRON_CALC_OPT_WITH_SECONDS must be set in options
  *  <minutes>   : 0-59
  *  <hours>     : 0-23
- *  <days>      : 1-31
+ *  <days>      : 1-31 or L
  *  <months>    : 1-12 or JAN through DEC
  *  <week days> : 0-7 or SUN through SAT; 0 and 7 == SUN
  *  <years>     : 2000-2063     CRON_CALC_OPT_WITH_YEARS must be set in options
- *  <seconds>   : 0-59          CRON_CALC_OPT_WITH_SECONDS must be set in options
  *
- * Step is allowed only after range (i.e. * or x-y). Step must be > 0.
+ * Step is allowed only after range (i.e. * or x-y). It must be > 0.
  * Value names are also allowed in ranges (e.g. MON-WED), even mixed (0-TUE).
  *
- * With CRON_CALC_OPT_ASSUME_STAR option set short expressions are allowed,
- * e.g. shorthand '* 1-10' is equivalent to full expression '* 1-10 * * *'
+ * The L character is allowed (only) for <days> and will match last day
+ * of any month. It is not allowed in a range, for expressions like '20-L'
+ * (meaning "any day from 20 through last day-of-month") use equivalent '20-31' instead.
+ * Sequences including L are also valid, e.g. "1,10-20,L".
  *
  * @param self The object to store parsed Cron rule
  * @param expr Cron expression, NULL-terminated string
