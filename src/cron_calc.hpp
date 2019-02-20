@@ -8,6 +8,8 @@
 
 #include "cron_calc.h"
 
+class CronCalcImpl;
+
 /**
  * C++ wrapper interface for cron_calc C API
  */
@@ -15,36 +17,37 @@ class CronCalc
 {
 public:
     CronCalc();
+    ~CronCalc();
 
     /**
-     * Wrapper for cron_calc_parse().
-     * Stores result of parsing internally.
-     * @see cron_calc_parse().
+     * Adds another Cron expression to this container.
+     * Following calls to next() will take it into account, if this call succeeds.
+     *
+     * @see cron_calc_parse() for details on arguments and return values.
      */
-    cron_calc_error parse(const char* expr, cron_calc_option_mask options, const char** err_location);
+    cron_calc_error addRule(const char* expr, cron_calc_option_mask options, const char** err_location);
 
     /**
-     * Wrapper for cron_calc_next().
-     * Does not modify this object.
-     * @see cron_calc_next().
+     * Adds another Cron expression with default options to this container.
+     * This short-cutting overload calls main method with CRON_CALC_OPT_DEFAULT option.
+     */
+    cron_calc_error addRule(const char* expr);
+
+    /**
+     * Calculates next time instant with regards to given reference time.
+     * Checks all rules added with addRule() and picks the earliest matching time.
+     * If no rules have been added so far, CRON_CALC_INVALID_TIME.
+     * @see cron_calc_next() for details on arguments and return values.
+     * @return CRON_CALC_INVALID_TIME Also if no rules have been added yet.
      */
     time_t next(time_t after) const;
 
-    /**
-     * Wrapper for cron_calc_is_same().
-     * @see cron_calc_is_same().
-     */
-    friend bool operator==(const CronCalc& cron1, const CronCalc& cron2);
-
-    /**
-     * Const reference to underlying C API object.
-     * Useful for testing only. If modified, behaviour is undefined.
-     * @return Underlying cron_calc object.
-     */
-    const cron_calc* c_obj() const;
+private:
+    CronCalc(const CronCalc&);
+    const CronCalc& operator=(const CronCalc&);
 
 private:
-    cron_calc mSelf;
+    CronCalcImpl* mPimpl;
 };
 
 #endif // CRON_CALC_HPP_

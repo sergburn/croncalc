@@ -3,40 +3,79 @@
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
 
-#include <string.h>
+#ifndef CRON_CALC_NO_EXCEPT
+#include <list>
+#define CRON_CALC_USE_STDLIST
+#else
+#error "TODO: support for simple list implementation"
+#endif
+
 #include "cron_calc.hpp"
 
 // ----------------------------------------------------------------------------
 
-CronCalc::CronCalc()
+#ifdef CRON_CALC_USE_STDLIST
+
+typedef std::list<cron_calc> CronCalcList;
+
+class CronCalcImpl
 {
-    memset(&mSelf, 0, sizeof mSelf);
+public:
+    CronCalcList mList;
+};
+
+#endif
+
+// ----------------------------------------------------------------------------
+
+CronCalc::CronCalc() :
+    mPimpl(new CronCalcImpl)
+{
 }
 
 // ----------------------------------------------------------------------------
 
-bool operator==(const CronCalc& cron1, const CronCalc& cron2)
+CronCalc::~CronCalc()
 {
-    return cron_calc_is_same(&cron1.mSelf, &cron2.mSelf);
+    delete mPimpl;
 }
 
 // ----------------------------------------------------------------------------
 
-cron_calc_error CronCalc::parse(const char* expr, cron_calc_option_mask options, const char** err_location)
+cron_calc_error CronCalc::addRule(const char* expr, cron_calc_option_mask options, const char** err_location)
 {
-    return cron_calc_parse(&mSelf, expr, options, err_location);
+    cron_calc cc;
+    cron_calc_error err = cron_calc_parse(&cc, expr, options, err_location);
+    if (err == CRON_CALC_OK)
+    {
+        mPimpl->mList.push_back(cc);
+    }
+    return err;
+}
+
+// ----------------------------------------------------------------------------
+
+cron_calc_error CronCalc::addRule(const char* expr)
+{
+    const char* err_location = NULL;
+    return addRule(expr, CRON_CALC_OPT_DEFAULT, &err_location);
 }
 
 // ----------------------------------------------------------------------------
 
 time_t CronCalc::next(time_t after) const
 {
-    return cron_calc_next(&mSelf, after);
-}
+    time_t earliest = CRON_CALC_INVALID_TIME;
+    for (CronCalcList::const_iterator iter = mPimpl->mList.begin();
+         iter != mPimpl->mList.end(); ++iter)
+    {
+        time_t next = cron_calc_next(&(*iter), after);
+        if (next != CRON_CALC_INVALID_TIME &&
+           (earliest == CRON_CALC_INVALID_TIME || next < earliest))
+        {
+            earliest = next;
+        }
+    }
 
-// ----------------------------------------------------------------------------
-
-const cron_calc* CronCalc::c_obj() const
-{
-    return &mSelf;
+    return earliest;
 }

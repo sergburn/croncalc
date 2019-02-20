@@ -5,11 +5,32 @@
  * https://opensource.org/licenses/MIT
  */
 
-#include <time.h>
-#include <stdio.h>
-#include <string.h>
+#include <new>
+#include <ctime>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <cstddef>
 
 #include "cron_calc.hpp"
+
+/* ---------------------------------------------------------------------------- */
+
+#ifdef CRON_CALC_NO_EXCEPT
+
+static uint32_t g_new_fail_count = 0;
+
+void* operator new  ( std::size_t count )
+{
+    if (g_new_fail_count > 0)
+    {
+        g_new_fail_count--;
+        return NULL;
+    }
+    return malloc(count);
+}
+
+#endif
 
 /* ---------------------------------------------------------------------------- */
 
@@ -68,6 +89,8 @@ time_t parseTimeString(const char* tm_str)
     return t;
 }
 
+#define TS(str_) parseTimeString(str_)
+
 /* ---------------------------------------------------------------------------- */
 
 void print_test(const char* kind, const char* expr, cron_calc_option_mask options)
@@ -123,7 +146,7 @@ void check_invalid(
     CronCalc cron;
     const char* err_location = NULL;
     print_test("invalid", expr, options);
-    CHECK_EQ_INT_LN(err, cron.parse(expr, options, &err_location), lineno);
+    CHECK_EQ_INT_LN(err, cron.addRule(expr, options, &err_location), lineno);
     CHECK_EQ_INT_LN(err_offset, err_location - expr, lineno);
 }
 
@@ -146,7 +169,7 @@ bool check_next(
 
     print_test("valid", expr, options);
 
-    err = cron.parse(expr, options, &err_location);
+    err = cron.addRule(expr, options, &err_location);
     CHECK_EQ_INT(CRON_CALC_OK, err);
     CHECK_TRUE(NULL == err_location);
     if (NULL != err_location)
@@ -198,9 +221,7 @@ bool check_same(
 {
     int numErrors = gNumErrors;
 
-    CronCalc cron1, cron2;
-    const cron_calc& cc1 = *(cron1.c_obj());
-    const cron_calc& cc2 = *(cron2.c_obj());
+    cron_calc cc1, cc2;
     const char* err_location = NULL;
     cron_calc_error err = CRON_CALC_OK;
     bool same = false;
@@ -208,7 +229,7 @@ bool check_same(
     print_test("1st", expr1, options1);
     print_test("2nd", expr2, options2);
 
-    err = cron1.parse(expr1, options1, &err_location);
+    err = cron_calc_parse(&cc1, expr1, options1, &err_location);
     CHECK_EQ_INT(CRON_CALC_OK, err);
     CHECK_TRUE(NULL == err_location);
     if (NULL != err_location)
@@ -216,7 +237,7 @@ bool check_same(
         printf("ERROR1 at char %u: '%s'\n", (uint32_t)(err_location - expr1), err_location);
     }
 
-    err = cron2.parse(expr2, options2, &err_location);
+    err = cron_calc_parse(&cc2, expr2, options2, &err_location);
     CHECK_EQ_INT(CRON_CALC_OK, err);
     CHECK_TRUE(NULL == err_location);
     if (NULL != err_location)
@@ -224,7 +245,7 @@ bool check_same(
         printf("ERROR2 at char %u: '%s'\n", (uint32_t)(err_location - expr2), err_location);
     }
 
-    CHECK_TRUE(same = (cron1 == cron2));
+    CHECK_TRUE(same = (cron_calc_is_same(&cc1, &cc2)));
     if (!same)
     {
         CHECK_EQ_INT(cc1.seconds, cc2.seconds);
@@ -288,6 +309,15 @@ int main()
         CHECK_EQ_INT(cron_calc_next(&cc, 2L<<56), CRON_CALC_INVALID_TIME);
     }
     CHECK_EQ_INT(cron_calc_next(&cc, -2), CRON_CALC_INVALID_TIME);
+
+#ifdef CRON_CALC_NO_EXCEPT
+    /*  */
+    g_new_fail_count = 100;
+    CronCalc cron1_fail;
+    CHECK_EQ_INT(CRON_CALC_ERROR_USAGE, cron1_fail.addRule("* * * * *", CRON_CALC_OPT_DEFAULT, &err_location));
+    CHECK_EQ_INT(CRON_CALC_INVALID_TIME, cron1_fail.next(1549747649));
+    g_new_fail_count = 0;
+#endif
 
     /* bad format */
     CHECK_EQ_INT(cron_calc_parse(&cc, " * * * * *", CRON_CALC_OPT_DEFAULT, NULL), CRON_CALC_ERROR_NUMBER_EXPECTED);
@@ -731,6 +761,22 @@ int main()
     CHECK_SAME(
         "* * * * 1-7", CRON_CALC_OPT_DEFAULT,
         "* * * * 0-6", CRON_CALC_OPT_DEFAULT);
+
+    /* Earliest */
+    CronCalc cron;
+    const time_t T1 = TS("2018-12-30_22:00:00");
+
+    cron.addRule("0 10 * JAN MON");
+    CHECK_EQ_INT(cron.next(T1), TS("2019-01-07_10:00:00"));
+    cron.addRule("0 10 * JAN TUE");
+    CHECK_EQ_INT(cron.next(T1), TS("2019-01-01_10:00:00")); // rule 2
+    CHECK_EQ_INT(cron.next(TS("2019-01-01_10:00:00")), TS("2019-01-07_10:00:00")); // rule 1
+    cron.addRule("0 10 * * MON");
+    CHECK_EQ_INT(cron.next(T1), TS("2018-12-31_10:00:00")); // rule 3
+    cron.addRule("0 11 * * *");
+    CHECK_EQ_INT(cron.next(T1), TS("2018-12-31_10:00:00")); // rule 3
+    cron.addRule("0 * * * *");
+    CHECK_EQ_INT(cron.next(T1), TS("2018-12-30_23:00:00")); // rule 5
 
     printf("Failures: %d\n", gNumErrors);
     return gNumErrors;

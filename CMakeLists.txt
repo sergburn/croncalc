@@ -37,3 +37,9 @@ endif()
 target_include_directories(cron_calc_test
     PRIVATE ${CMAKE_CURRENT_LIST_DIR}/src
 )
+
+if(${CRON_CALC_NO_EXCEPT})
+    target_compile_features(cron_calc_cpp PUBLIC cxx_noexcept)
+    target_compile_definitions(cron_calc_cpp PUBLIC CRON_CALC_NO_EXCEPT)
+    target_compile_options(cron_calc_test PRIVATE -Wno-new-returns-null)
+endif()

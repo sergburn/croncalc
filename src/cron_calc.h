@@ -56,7 +56,8 @@ typedef enum cron_calc_error
     CRON_CALC_ERROR_EXPR_LONG = 5,          /*!< Expression too long, did not end after last supported field */
     CRON_CALC_ERROR_INVALID_NAME = 6,       /*!< Unknown value name detected */
     CRON_CALC_ERROR_NUMBER_EXPECTED = 7,    /*!< Number could not be parsed */
-    CRON_CALC_ERROR_IMPOSSIBLE_DATE = 8     /*!< Date specified in expression never matches, e.g. Nov-31 or 2001-Feb-29 */
+    CRON_CALC_ERROR_IMPOSSIBLE_DATE = 8,    /*!< Date specified in expression never matches, e.g. Nov-31 or 2001-Feb-29 */
+    CRON_CALC_ERROR_USAGE = 9               /* Invalid usage of the API */
 } cron_calc_error;
 
 #define CRON_CALC_INVALID_TIME ((time_t) -1) /* as defined in mktime() */
@@ -102,12 +103,12 @@ cron_calc_error cron_calc_parse(cron_calc* self, const char* expr, cron_calc_opt
  * This function takes reference time from given `struct tm` object and updates it
  * with the next time instant according to the rule stored in `cron_calc` object.
  *
- * @param self The ready cron_calc object, initialized by successful cron_calc_parse() call.
- *             Must not be NULL or contain only zeroes.
+ * @param self The cron_calc object, initialized by successful cron_calc_parse() call.
+ *             Must not be NULL.
  * @param after Time instant to start next search after.
  *              Note that even if given time matches specified rule,
  *              it will not be returned, only some moment `after` it.
- *              This allows to calol this function in a loop without changing argument:
+ *              This allows to call this function in a loop without changing argument:
  *              @code
  *              time_t start = 1515151515;
  *              time_t next = cron_calc_next(..., start);
