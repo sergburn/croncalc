@@ -20,7 +20,7 @@
 
 static uint32_t g_new_fail_count = 0;
 
-void* operator new  ( std::size_t count )
+void* operator new ( std::size_t count )
 {
     if (g_new_fail_count > 0)
     {
@@ -98,9 +98,9 @@ void print_test(const char* kind, const char* expr, cron_calc_option_mask option
 #if CRON_CALC_TEST_VERBOSE
     printf("Testing %s expression '%s' (%s) ...\n",
         kind, expr,
-        CRON_CALC_OPT_WITH_YEARS ? "years" :
-        CRON_CALC_OPT_WITH_SECONDS ? "seconds" :
-        CRON_CALC_OPT_FULL ? "full" : "default");
+        (options & CRON_CALC_OPT_WITH_YEARS) ? "years" :
+        (options & CRON_CALC_OPT_WITH_SECONDS) ? "seconds" :
+        (options & CRON_CALC_OPT_FULL) ? "full" : "default");
 #else
     (void) expr;
     (void) options;
@@ -311,11 +311,16 @@ int main()
     CHECK_EQ_INT(cron_calc_next(&cc, -2), CRON_CALC_INVALID_TIME);
 
 #ifdef CRON_CALC_NO_EXCEPT
-    /*  */
-    g_new_fail_count = 100;
-    CronCalc cron1_fail;
-    CHECK_EQ_INT(CRON_CALC_ERROR_USAGE, cron1_fail.addRule("* * * * *", CRON_CALC_OPT_DEFAULT, &err_location));
-    CHECK_EQ_INT(CRON_CALC_INVALID_TIME, cron1_fail.next(1549747649));
+    g_new_fail_count = 1;
+    CronCalc cron_fail_new;
+    CHECK_EQ_INT(CRON_CALC_ERROR_OOM, cron_fail_new.addRule("* * * * *", CRON_CALC_OPT_DEFAULT, &err_location));
+    CHECK_EQ_INT(CRON_CALC_INVALID_TIME, cron_fail_new.next(1549747649));
+    g_new_fail_count = 0;
+
+    CronCalc cron_fail_add;
+    CHECK_EQ_INT(CRON_CALC_OK, cron_fail_add.addRule("* * * * *", CRON_CALC_OPT_DEFAULT, &err_location));
+    g_new_fail_count = 1;
+    CHECK_EQ_INT(CRON_CALC_ERROR_OOM, cron_fail_add.addRule("1 * * * *", CRON_CALC_OPT_DEFAULT, &err_location));
     g_new_fail_count = 0;
 #endif
 

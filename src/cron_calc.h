@@ -57,7 +57,9 @@ typedef enum cron_calc_error
     CRON_CALC_ERROR_INVALID_NAME = 6,       /*!< Unknown value name detected */
     CRON_CALC_ERROR_NUMBER_EXPECTED = 7,    /*!< Number could not be parsed */
     CRON_CALC_ERROR_IMPOSSIBLE_DATE = 8,    /*!< Date specified in expression never matches, e.g. Nov-31 or 2001-Feb-29 */
-    CRON_CALC_ERROR_USAGE = 9               /* Invalid usage of the API */
+    CRON_CALC_ERROR_OOM = 9                 /*!< Out-of-memory. This error may only be returned
+                                                 by C++ interface (CronCalc) if this library
+                                                 is compiled with exceptions disabled. */
 } cron_calc_error;
 
 #define CRON_CALC_INVALID_TIME ((time_t) -1) /* as defined in mktime() */
