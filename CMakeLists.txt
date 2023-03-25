@@ -3,8 +3,9 @@
 # This software is released under the MIT License.
 # https://opensource.org/licenses/MIT
 
-project(CronCalc)
 cmake_minimum_required(VERSION 3.6)
+
+project(CronCalc)
 
 add_library(cron_calc_c STATIC src/cron_calc.c)
 target_compile_options(cron_calc_c PRIVATE -std=c99 -Wall -Werror -pedantic)
